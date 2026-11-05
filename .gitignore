@@ -1,0 +1,23 @@
+# Secrets
+*.jks
+*.keystore
+keystore.properties
+local.properties
+
+# Reference clone of the Aerya fork (not committed)
+reference/
+
+# Build outputs
+build/
+.gradle/
+**/build/
+*.apk
+*.aab
+captures/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
