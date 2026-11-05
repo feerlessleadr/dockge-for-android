@@ -22,3 +22,7 @@
 - NOT verified: a real login with and without 2FA; the Socket.IO Java client against the server's protocol on a real connection; Keystore vault on a device; release APK at runtime (R8 rules untested at runtime).
 - Emulator note: the Android emulator on this PC cannot resolve the internal test host (host DNS for the internal zone is not used by the emulator, `-dns-server` did not help, the image has no root for a hosts entry). Live checks go on the owner's real phone (WireGuard).
 - Deviation from docs/architecture.md: the vault stores ciphertext in SharedPreferences, not DataStore (synchronous reads, nothing else needed in M1).
+
+### M1 live check (2026-11-05, owner's real phone, debug build, isolated test VM instance)
+- Verified by the owner: address accepted; password then TOTP login accepted; state reached "connected" and the stack count and names appeared; a wrong password and a wrong code each showed the matching error.
+- Still NOT verified: token login after an app restart or reconnect (loginByToken on a live server), a revoked token on a live server, rate-limit message on a live server, Keystore vault behavior after reboot, release (R8) APK at runtime, instances without 2FA.

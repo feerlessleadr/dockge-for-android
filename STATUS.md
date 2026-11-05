@@ -1,6 +1,6 @@
 # STATUS (2026-11-05)
 
-**Phase:** M1 code done on branch m1-api-login (unit tests pass). Live login check on a real phone pending.
+**Phase:** M1 verified on a real phone; PR open. Next: M2 (instances list and connection status).
 
 ## Done
 - Project registered in WORKSPACE.md; CLAUDE.md, STATUS.md, DECISIONS.md created.
