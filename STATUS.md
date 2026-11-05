@@ -1,6 +1,6 @@
 # STATUS (2026-11-05)
 
-**Phase:** repository setup. No app code yet.
+**Phase:** plan approved (2026-11-05). docs/architecture.md and docs/build-plan.md written. No app code; waiting for owner to say start M0.
 
 ## Done
 - Project registered in WORKSPACE.md; CLAUDE.md, STATUS.md, DECISIONS.md created.

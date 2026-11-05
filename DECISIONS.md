@@ -40,3 +40,14 @@
 - **Decision**: PKCS12 keystore, RSA 4096, alias `dockge`, valid about 100 years, stored outside the repo in a folder the owner backs up. One password serves as store and key password. Repo secrets: SIGNING_KEYSTORE_BASE64, SIGNING_STORE_PASSWORD, SIGNING_KEY_PASSWORD, SIGNING_KEY_ALIAS.
 - **Cert SHA-256**: E4:12:AC:F4:14:61:EE:D0:B8:98:03:19:98:0F:FC:E6:0B:F6:B4:1B:5A:97:3D:7B:3C:7E:59:5A:0D:A1:A0:F3 (public; to be pinned in release.yml once an app exists).
 - **Impact**: Never regenerate. Losing it breaks Obtainium updates.
+
+### 2026-11-05, Phase 0 findings shape the design
+- **Context**: Source reading of dockge-enhanced 1.5.4 (docs/dockge-api.md).
+- **Decision (proposed, not yet approved)**: Use the Socket.IO API as the primary channel (it alone has per-container health, image, uptime, update status). Store only the session JWT (no expiry) on the device, not the password or TOTP seed. Push via Apprise to ntfy first; decide on a companion poller/relay for deep links afterwards.
+- **Impact**: Pending owner approval before app code.
+
+### 2026-11-05, Plan approved: ntfy via Apprise first, session token only
+- **Context**: Owner reviewed Phase 0 and approved both open proposals.
+- **Decision**: (1) v1 push = dockge-enhanced to an Apprise API container to ntfy; a companion relay or poller for deep links and extra events is deferred until M6 shows the limits. (2) The device stores only the session JWT (Keystore-backed key). No password, no TOTP seed. Any TOTP seed storage needs separate explicit approval.
+- **Rationale**: Zero server code for v1; the session token has no expiry and is revocable, so a second secret adds risk but little benefit.
+- **Impact**: docs/architecture.md and docs/build-plan.md written. Foreground service type specialUse (dataSync is capped at 6 h per day on Android 15+). Socket.IO Java client to be confirmed in M1.
