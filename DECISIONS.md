@@ -34,3 +34,9 @@
 - **Decision**: Classic branch protection: PR required (0 approvals, solo project), required check `build-and-test`, enforced for admins, no force pushes or deletions.
 - **Rationale**: Keeps main releasable; 0 approvals because there is one maintainer.
 - **Impact**: All changes go through PRs from now on. `pr.yml` job name must stay `build-and-test`.
+
+### 2026-11-05, Keystore created
+- **Context**: First release needs the stable signing key.
+- **Decision**: PKCS12 keystore, RSA 4096, alias `dockge`, valid about 100 years, stored outside the repo in a folder the owner backs up. One password serves as store and key password. Repo secrets: SIGNING_KEYSTORE_BASE64, SIGNING_STORE_PASSWORD, SIGNING_KEY_PASSWORD, SIGNING_KEY_ALIAS.
+- **Cert SHA-256**: E4:12:AC:F4:14:61:EE:D0:B8:98:03:19:98:0F:FC:E6:0B:F6:B4:1B:5A:97:3D:7B:3C:7E:59:5A:0D:A1:A0:F3 (public; to be pinned in release.yml once an app exists).
+- **Impact**: Never regenerate. Losing it breaks Obtainium updates.
