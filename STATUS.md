@@ -1,6 +1,6 @@
 # STATUS (2026-11-05)
 
-**Phase:** Phase 0 done (docs/dockge-api.md). Awaiting owner approval of the plan before any app code.
+**Phase:** plan approved (2026-11-05). docs/architecture.md and docs/build-plan.md written. No app code; waiting for owner to say start M0.
 
 ## Done
 - Project registered in WORKSPACE.md; CLAUDE.md, STATUS.md, DECISIONS.md created.
@@ -9,7 +9,7 @@
 ## In progress (awaiting owner approval)
 - Branch protection applied. Release keystore created and the 4 repo secrets set (2026-11-05).
 
-## Next action (owner decision needed)
+## Next action
 - Finish steps 1-4, report, then stop. Phase 0 (write `docs/dockge-api.md`) only after the owner approves.
 
 ## Open questions
