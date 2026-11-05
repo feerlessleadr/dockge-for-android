@@ -1,6 +1,6 @@
 # STATUS (2026-11-05)
 
-**Phase:** M0 scaffold built locally; PR open. Next: M1 (API client and login).
+**Phase:** M1 code done on branch m1-api-login (unit tests pass). Live login check on a real phone pending.
 
 ## Done
 - Project registered in WORKSPACE.md; CLAUDE.md, STATUS.md, DECISIONS.md created.

@@ -15,3 +15,10 @@
 - NOT verified: the app has not been launched on an emulator or phone; CI run on a real Gradle project (this PR is the first); the signed release path (needs a tag).
 - `.gitattributes` forces LF on `gradlew` so Linux CI can run it.
 - In PowerShell, quote `-P` arguments that contain dots (`'-PversionName=0.1.0'`), otherwise the argument is split.
+
+## 2026-11-05, M1 (branch m1-api-login)
+- Added: `BaseUrl` (https-only validation), `DockgeSocket` interface and `SocketIoDockgeSocket` (Socket.IO Java client 2.1.2, websocket transport, no Origin or endpoint header), `AuthApi` and `AuthParser`, `InstanceSession` (token login on every connect, password then 2FA code, token-only storage), `KeystoreTokenVault` (AES-GCM Keystore key, instance id as associated data), a debug-only read-only screen (connect, sign in, list stack names).
+- Verified: 31 unit tests pass locally (login state machine incl. 2FA, revoked token, reconnect, rate limit, sign out; parsers; URL validation). Debug and release (R8) builds succeed. The test server answers an unauthenticated Socket.IO handshake (engine.io v4, websocket upgrade offered).
+- NOT verified: a real login with and without 2FA; the Socket.IO Java client against the server's protocol on a real connection; Keystore vault on a device; release APK at runtime (R8 rules untested at runtime).
+- Emulator note: the Android emulator on this PC cannot resolve the internal test host (host DNS for the internal zone is not used by the emulator, `-dns-server` did not help, the image has no root for a hosts entry). Live checks go on the owner's real phone (WireGuard).
+- Deviation from docs/architecture.md: the vault stores ciphertext in SharedPreferences, not DataStore (synchronous reads, nothing else needed in M1).
