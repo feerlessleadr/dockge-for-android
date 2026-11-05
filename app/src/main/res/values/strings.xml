@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Dockge</string>
+    <string name="placeholder_title">Dockge for Android</string>
+    <string name="placeholder_body">No instances yet. This is the M0 scaffold.</string>
+</resources>
