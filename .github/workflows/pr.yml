@@ -1,0 +1,29 @@
+name: PR build
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Gradle project
+        id: detect
+        run: |
+          if [ -f gradlew ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; echo "No Gradle project yet; skipping build."; fi
+      - uses: actions/setup-java@v4
+        if: steps.detect.outputs.found == 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.detect.outputs.found == 'true'
+      - name: Build debug and run unit tests
+        if: steps.detect.outputs.found == 'true'
+        run: ./gradlew --no-daemon assembleDebug testDebugUnitTest
