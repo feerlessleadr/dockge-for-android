@@ -28,3 +28,9 @@
 
 ### 2026-11-05, Standalone project
 - **Decision**: No workspace connections. dockge-enhanced and ntfy are external dependencies.
+
+### 2026-11-05, Branch protection on main
+- **Context**: Owner asked for PRs and passing checks on main.
+- **Decision**: Classic branch protection: PR required (0 approvals, solo project), required check `build-and-test`, enforced for admins, no force pushes or deletions.
+- **Rationale**: Keeps main releasable; 0 approvals because there is one maintainer.
+- **Impact**: All changes go through PRs from now on. `pr.yml` job name must stay `build-and-test`.
