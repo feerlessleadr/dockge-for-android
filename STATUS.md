@@ -1,6 +1,6 @@
 # STATUS (2026-11-05)
 
-**Phase:** M1 verified on a real phone; PR open. Next: M2 (instances list and connection status).
+**Phase:** M2 code done on branch m2-instances (49 unit tests pass); phone check pending. Next: M3 (stacks and containers, read only).
 
 ## Done
 - Project registered in WORKSPACE.md; CLAUDE.md, STATUS.md, DECISIONS.md created.
