@@ -1,15 +1,11 @@
 package com.feerlessleadr.dockge.data
 
 import com.feerlessleadr.dockge.api.CallTimeoutException
-import com.feerlessleadr.dockge.api.DockgeSocket
+
 import com.feerlessleadr.dockge.api.FailureKind
-import com.feerlessleadr.dockge.api.SocketState
-import com.feerlessleadr.dockge.core.TokenVault
+
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.emptyFlow
+
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -21,41 +17,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-
-private class FakeSocket : DockgeSocket {
-    val stateFlow = MutableStateFlow<SocketState>(SocketState.Disconnected)
-    override val state: StateFlow<SocketState> = stateFlow
-    val calls = mutableListOf<Pair<String, List<JsonElement>>>()
-    var handler: (String, List<JsonElement>) -> JsonElement = { e, _ -> error("unexpected call $e") }
-    var autoConnect = true
-    private var generation = 0
-
-    override fun connect() {
-        stateFlow.value = SocketState.Connecting
-        if (autoConnect) stateFlow.value = SocketState.Connected(++generation)
-    }
-
-    override fun close() { stateFlow.value = SocketState.Disconnected }
-
-    override suspend fun call(event: String, args: List<JsonElement>, timeoutMs: Long): JsonElement {
-        calls += event to args
-        return handler(event, args)
-    }
-
-    override fun events(event: String): Flow<List<JsonElement>> = emptyFlow()
-
-    fun reconnect() {
-        stateFlow.value = SocketState.Disconnected
-        stateFlow.value = SocketState.Connected(++generation)
-    }
-}
-
-private class MemoryVault : TokenVault {
-    val map = mutableMapOf<String, String>()
-    override fun get(instanceId: String) = map[instanceId]
-    override fun put(instanceId: String, token: String) { map[instanceId] = token }
-    override fun remove(instanceId: String) { map.remove(instanceId) }
-}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class InstanceSessionTest {

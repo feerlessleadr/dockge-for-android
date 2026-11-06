@@ -14,7 +14,7 @@ One phone app that manages several independent dockge-enhanced (Aerya fork) inst
 | OkHttp for REST and for the ntfy stream | One HTTP stack, one TLS and proxy configuration. |
 | kotlinx.serialization, coroutines and Flow | Typed DTOs and state streams. |
 | Plain constructor injection (an `AppContainer`), no DI framework | Small app, fewer build moving parts. Revisit if it hurts. |
-| DataStore for settings, Android Keystore AES-GCM key for secrets | `EncryptedSharedPreferences` is deprecated, so secrets are encrypted with our own Keystore key and stored in DataStore. |
+| SharedPreferences for the instance list and for encrypted tokens, Android Keystore AES-GCM key for secrets | `EncryptedSharedPreferences` is deprecated, so tokens are encrypted with our own Keystore key. Plain SharedPreferences (committed synchronously) is enough for a small list. Moved from DataStore on 2026-11-06. |
 
 ## Layers
 Dependencies point down only. Each layer has its own package and tests.
