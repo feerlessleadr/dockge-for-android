@@ -57,3 +57,9 @@
 - **Decision**: Reuse the toolchain pattern (AGP 9.4.1, Kotlin 2.4.21, Compose BOM, Gradle wrapper 9.8.1, compileSdk 37 with targetSdk 36 because platform 36 is not installed here). `allowBackup=false` plus empty data extraction rules so tokens never leave the phone. Release builds refuse debug signing unless `-PallowDebugSigning`.
 - **Rationale**: Proven on this machine; fewer unknowns before the real work (M1).
 - **Impact**: build-plan M0; the PR workflow now runs a real build.
+
+### 2026-11-05, Socket.IO Java client confirmed (M1)
+- **Context**: Open item from the architecture: does the Java client work against the fork's server?
+- **Decision**: Keep `io.socket:socket.io-client` 2.1.2 (websocket transport only, `org.json` excluded because Android ships it). It connected, logged in with 2FA and received `stackList` on a real phone against dockge-enhanced 1.5.x.
+- **Rationale**: Works as designed; no need to hand-write the protocol.
+- **Impact**: Closes the "Socket.IO Java client against the fork's server version" open item in docs/build-plan.md. The emulator cannot reach the internal test host, so live checks use the real phone.

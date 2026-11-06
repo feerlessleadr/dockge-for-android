@@ -95,6 +95,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.okhttp)
+    implementation(libs.socketio.client) {
+        // Android ships org.json; the artifact would duplicate it.
+        exclude(group = "org.json", module = "json")
+    }
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.androidx.compose.ui.tooling)

@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.feerlessleadr.dockge.ui.debug.DebugScreen
 import com.feerlessleadr.dockge.ui.theme.DockgeTheme
 
 class MainActivity : ComponentActivity() {
@@ -24,6 +25,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             DockgeTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+                    if (BuildConfig.DEBUG) {
+                        DebugScreen(Modifier.padding(padding))
+                        return@Scaffold
+                    }
                     Column(
                         modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
                         verticalArrangement = Arrangement.Center,
