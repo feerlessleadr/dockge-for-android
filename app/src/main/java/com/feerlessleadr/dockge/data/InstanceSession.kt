@@ -36,7 +36,7 @@ sealed interface ConnectionState {
  */
 class InstanceSession(
     private val instanceId: String,
-    private val socket: DockgeSocket,
+    val socket: DockgeSocket,
     private val vault: TokenVault,
     private val scope: CoroutineScope,
 ) {

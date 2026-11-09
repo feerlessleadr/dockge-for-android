@@ -33,3 +33,10 @@
 - Verified: 49 unit tests pass (repository persistence and validation, token handling on edit and delete, session manager with several instances, add, delete, rename, address change, reconnect, sign out). Debug and release (R8) builds succeed.
 - NOT verified: the screens on a device; persistence after closing the app and rebooting the phone; reconnect after losing the network; two live instances at once; Keystore token after a reboot.
 - Reconnect uses the Socket.IO library's built-in backoff (1 s growing to 30 s); the card shows "Can't connect" with the reason while it retries, and Retry rebuilds the socket.
+
+## 2026-11-09, M3 (branch m3-stacks)
+- M2 (PR 6) merged after the owner tested it on a real phone: saved instances, list with status, reconnect after closing the app and rebooting.
+- Added (read only): `Stacks.kt` (typed `Stack`, `ServiceStatus`, `ContainerInstance`, `StackDetail`, `StackParser` for the pushed `stackList` and the acks of `serviceStatusList` and `containerInstances`), `StackListStore` (listens before login, keeps the last pushed list), `StackDetailLoader` (the two read-only calls together), `SessionManager.stackLists`, `Uptime`/`PortFormat`/`containerViews()` (join container with its service start time, simplify ports, fall back to the container's own ports), screens: instance card shows "N stacks, M running" and opens the stack list; stack list with search and status; stack detail with state, health, image, uptime and ports per container, refreshed every 10 s and by pull-to-refresh. M1's name-only parser removed.
+- No write call exists in the app: nothing sends start, stop, restart, down or update yet (M4).
+- Verified: 64 unit tests pass (parsers on samples from the fork's source, formatting, store, loader, manager); debug and release (R8) builds succeed.
+- NOT verified: the screens on a device; payload shapes against a live server (parsers are written from the fork's source, so a real capture may show differences, for example in `startedAt` or the container `ports` string); behavior with many stacks; external or unmanaged stacks on a live server.

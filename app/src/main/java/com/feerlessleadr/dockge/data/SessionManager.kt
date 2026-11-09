@@ -1,6 +1,7 @@
 package com.feerlessleadr.dockge.data
 
 import com.feerlessleadr.dockge.api.DockgeSocket
+import com.feerlessleadr.dockge.api.Stack
 import com.feerlessleadr.dockge.core.BaseUrl
 import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.core.TokenVault
@@ -13,9 +14,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Keeps one [InstanceSession] (one socket, one token) per saved instance and follows the repository: new instances
- * connect, deleted ones disconnect, and an instance whose address changed gets a fresh socket.
- * Everything runs on [scope], which must be single threaded (the main dispatcher in the app).
+ * Keeps one [InstanceSession] (one socket, one token) and one [StackListStore] per saved instance and follows the
+ * repository: new instances connect, deleted ones disconnect, and an instance whose address changed gets a fresh
+ * socket. Everything runs on [scope], which must be single threaded (the main dispatcher in the app).
  */
 class SessionManager(
     private val repository: InstanceRepository,
@@ -23,7 +24,12 @@ class SessionManager(
     private val scope: CoroutineScope,
     private val socketFactory: (BaseUrl) -> DockgeSocket,
 ) {
-    private class Entry(val baseUrl: String, val session: InstanceSession, val collector: Job)
+    private class Entry(
+        val baseUrl: String,
+        val session: InstanceSession,
+        val stackStore: StackListStore,
+        val collectors: List<Job>,
+    )
 
     private val entries = mutableMapOf<String, Entry>()
     private var followJob: Job? = null
@@ -32,6 +38,11 @@ class SessionManager(
 
     /** Connection state per instance id. */
     val states: StateFlow<Map<String, ConnectionState>> = _states.asStateFlow()
+
+    private val _stackLists = MutableStateFlow<Map<String, List<Stack>>>(emptyMap())
+
+    /** Last received stack list per instance id (absent until the server has pushed one). */
+    val stackLists: StateFlow<Map<String, List<Stack>>> = _stackLists.asStateFlow()
 
     fun start() {
         if (followJob != null) return
@@ -67,17 +78,25 @@ class SessionManager(
             _states.update { it + (instance.id to ConnectionState.Failed("The saved address is not valid.")) }
             return
         }
-        val session = InstanceSession(instance.id, socketFactory(url), vault, scope)
-        val collector = scope.launch { session.state.collect { s -> _states.update { it + (instance.id to s) } } }
-        entries[instance.id] = Entry(instance.baseUrl, session, collector)
+        val socket = socketFactory(url)
+        // The store listens before the session starts: the server pushes the first list right after login.
+        val store = StackListStore(socket, scope)
+        val session = InstanceSession(instance.id, socket, vault, scope)
+        val collectors = listOf(
+            scope.launch { session.state.collect { s -> _states.update { it + (instance.id to s) } } },
+            scope.launch { store.stacks.collect { list -> if (list != null) _stackLists.update { it + (instance.id to list) } } },
+        )
+        entries[instance.id] = Entry(instance.baseUrl, session, store, collectors)
         session.start()
     }
 
     private fun remove(id: String) {
         entries.remove(id)?.let {
-            it.collector.cancel()
+            it.collectors.forEach(Job::cancel)
+            it.stackStore.stop()
             it.session.stop()
         }
         _states.update { it - id }
+        _stackLists.update { it - id }
     }
 }

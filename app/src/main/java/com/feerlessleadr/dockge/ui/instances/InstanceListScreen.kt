@@ -46,7 +46,7 @@ import com.feerlessleadr.dockge.data.ConnectionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (String) -> Unit) {
+fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (String) -> Unit, onOpen: (String) -> Unit) {
     val rows by vm.rows.collectAsState()
     var loginFor by remember { mutableStateOf<String?>(null) }
 
@@ -70,6 +70,8 @@ fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (Strin
                         onClick = {
                             if (row.state is ConnectionState.NeedsLogin || row.state is ConnectionState.NeedsTwoFactor) {
                                 loginFor = row.instance.id
+                            } else if (row.state == ConnectionState.Connected) {
+                                onOpen(row.instance.id)
                             }
                         },
                         onEdit = { onEdit(row.instance.id) },
@@ -102,6 +104,9 @@ private fun InstanceCard(row: InstanceRow, onClick: () -> Unit, onEdit: () -> Un
                     style = MaterialTheme.typography.labelLarge,
                     color = statusColor(s),
                 )
+                if (s == ConnectionState.Connected && row.stackCount != null) {
+                    Text("${row.stackCount} stacks, ${row.runningCount} running", style = MaterialTheme.typography.bodySmall)
+                }
             }
             Box {
                 TextButton(onClick = { menu = true }) { Text("⋮") }
