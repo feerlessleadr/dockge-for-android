@@ -1,7 +1,7 @@
 package com.feerlessleadr.dockge.data
 
 import com.feerlessleadr.dockge.api.DockgeSocket
-import com.feerlessleadr.dockge.api.Stack
+
 import com.feerlessleadr.dockge.core.BaseUrl
 import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.core.TokenVault
@@ -22,6 +22,7 @@ class SessionManager(
     private val repository: InstanceRepository,
     private val vault: TokenVault,
     private val scope: CoroutineScope,
+    private val clock: () -> Long = System::currentTimeMillis,
     private val socketFactory: (BaseUrl) -> DockgeSocket,
 ) {
     private class Entry(
@@ -29,6 +30,7 @@ class SessionManager(
         val session: InstanceSession,
         val stackStore: StackListStore,
         val collectors: List<Job>,
+        val openedAt: Long,
     )
 
     private val entries = mutableMapOf<String, Entry>()
@@ -39,10 +41,10 @@ class SessionManager(
     /** Connection state per instance id. */
     val states: StateFlow<Map<String, ConnectionState>> = _states.asStateFlow()
 
-    private val _stackLists = MutableStateFlow<Map<String, List<Stack>>>(emptyMap())
+    private val _stackLists = MutableStateFlow<Map<String, List<ServerStacks>>>(emptyMap())
 
-    /** Last received stack list per instance id (absent until the server has pushed one). */
-    val stackLists: StateFlow<Map<String, List<Stack>>> = _stackLists.asStateFlow()
+    /** Last received stack lists per instance id, one entry per server (the instance itself and any linked servers). Absent until the first push. */
+    val stackLists: StateFlow<Map<String, List<ServerStacks>>> = _stackLists.asStateFlow()
 
     fun start() {
         if (followJob != null) return
@@ -51,11 +53,37 @@ class SessionManager(
 
     fun session(id: String): InstanceSession? = entries[id]?.session
 
+    /**
+     * Call when the app comes to the foreground or the network comes back. A phone that slept can leave sockets half
+     * dead, so instances that are not connected get a fresh socket, and connected ones are checked first.
+     * Instances waiting for a password or code are left alone.
+     */
+    fun recover() {
+        for (id in entries.keys.toList()) {
+            when (_states.value[id]) {
+                ConnectionState.Connected -> scope.launch {
+                    val session = entries[id]?.session ?: return@launch
+                    if (!session.verify()) reconnect(id)
+                }
+                is ConnectionState.NeedsLogin, is ConnectionState.NeedsTwoFactor, ConnectionState.LoggingIn -> Unit
+                else -> {
+                    // A socket opened a moment ago (for example at app start) is still trying; do not restart it.
+                    val opened = entries[id]?.openedAt ?: continue
+                    if (clock() - opened >= RECOVER_GRACE_MS) reconnect(id)
+                }
+            }
+        }
+    }
+
     /** Drops the socket and connects again (the "Retry" action). */
     fun reconnect(id: String) {
         val instance = repository.get(id) ?: return
         remove(id)
         open(instance)
+    }
+
+    private companion object {
+        const val RECOVER_GRACE_MS = 10_000L
     }
 
     private fun sync(list: List<Instance>) {
@@ -84,9 +112,9 @@ class SessionManager(
         val session = InstanceSession(instance.id, socket, vault, scope)
         val collectors = listOf(
             scope.launch { session.state.collect { s -> _states.update { it + (instance.id to s) } } },
-            scope.launch { store.stacks.collect { list -> if (list != null) _stackLists.update { it + (instance.id to list) } } },
+            scope.launch { store.servers.collect { list -> if (list != null) _stackLists.update { it + (instance.id to list) } } },
         )
-        entries[instance.id] = Entry(instance.baseUrl, session, store, collectors)
+        entries[instance.id] = Entry(instance.baseUrl, session, store, collectors, clock())
         session.start()
     }
 

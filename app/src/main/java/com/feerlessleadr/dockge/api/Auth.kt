@@ -91,8 +91,8 @@ object AuthParser {
 
 /** The login calls. The password and the code only live in the arguments of one call. */
 class AuthApi(private val socket: DockgeSocket) {
-    suspend fun loginByToken(token: String): TokenLoginResult =
-        AuthParser.parseTokenLogin(socket.call("loginByToken", listOf(JsonPrimitive(token))))
+    suspend fun loginByToken(token: String, timeoutMs: Long = DockgeSocket.DEFAULT_TIMEOUT_MS): TokenLoginResult =
+        AuthParser.parseTokenLogin(socket.call("loginByToken", listOf(JsonPrimitive(token)), timeoutMs))
 
     suspend fun login(username: String, password: String, code: String? = null, challenge: String? = null): LoginResult {
         val body = buildJsonObject {

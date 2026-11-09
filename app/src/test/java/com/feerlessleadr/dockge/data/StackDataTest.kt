@@ -26,14 +26,80 @@ class StackDataTest {
         val socket = FakeSocket()
         val store = StackListStore(socket, backgroundScope)
         runCurrent()
-        assertNull(store.stacks.value)
+        assertNull(store.servers.value)
         socket.push("agent", JsonPrimitive("stackList"), stackListPush("a", "b"))
         runCurrent()
-        assertEquals(listOf("a", "b"), store.stacks.value!!.map { it.name })
+        assertEquals(listOf("a", "b"), store.servers.value!!.single().stacks.map { it.name })
         socket.push("agent", JsonPrimitive("terminalWrite"), JsonPrimitive("x"))
         socket.push("agent", JsonPrimitive("stackList"), stackListPush("c"))
         runCurrent()
-        assertEquals(listOf("c"), store.stacks.value!!.map { it.name })
+        assertEquals(listOf("c"), store.servers.value!!.single().stacks.map { it.name })
+    }
+
+    private fun pushFor(endpoint: String, vararg names: String) = j(
+        """{"ok":true,"endpoint":"$endpoint","stackList":{${names.joinToString(",") { "\"$it\":{\"name\":\"$it\",\"status\":3}" }}}}""",
+    )
+
+    /** The bug seen on a federated instance: lists of linked servers replaced each other and the counts flipped. */
+    @Test fun listsOfLinkedServersDoNotOverwriteEachOther() = runTest {
+        val socket = FakeSocket()
+        val store = StackListStore(socket, backgroundScope)
+        runCurrent()
+        socket.push(
+            "agentList",
+            j("""{"ok":true,"agentList":{"":{"displayName":"Main"},"h2:5001":{"displayName":"Media","url":"https://h2"},"h3:5001":{"displayName":"","url":"https://h3"}}}"""),
+        )
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("", "a"))
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("h2:5001", "x", "y"))
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("h3:5001", "z"))
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("", "a"))
+        runCurrent()
+        val servers = store.servers.value!!
+        // Linked servers are sorted by their display name, so the unnamed one (shown as its address) comes first.
+        assertEquals(listOf("", "h3:5001", "h2:5001"), servers.map { it.endpoint })
+        assertEquals(listOf("Main", "https://h3", "Media"), servers.map { it.name })
+        assertEquals(listOf(1, 1, 2), servers.map { it.stacks.size })
+        assertTrue(servers.first().isLocal)
+    }
+
+    @Test fun unnamedLocalServerGetsADefaultNameAndStatusIsTracked() = runTest {
+        val socket = FakeSocket()
+        val store = StackListStore(socket, backgroundScope)
+        runCurrent()
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("", "a"))
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("h2:5001", "x"))
+        socket.push("agentStatus", j("""{"endpoint":"h2:5001","status":"offline"}"""))
+        runCurrent()
+        val servers = store.servers.value!!
+        assertEquals("This server", servers[0].name)
+        assertEquals("h2:5001", servers[1].name)
+        assertEquals("offline", servers[1].status)
+    }
+
+    @Test fun removedServerIsDropped() = runTest {
+        val socket = FakeSocket()
+        val store = StackListStore(socket, backgroundScope)
+        runCurrent()
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("", "a"))
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("h2:5001", "x"))
+        runCurrent()
+        assertEquals(2, store.servers.value!!.size)
+        socket.push("agentList", j("""{"ok":true,"agentList":{"":{"displayName":""}}}"""))
+        runCurrent()
+        assertEquals(listOf(""), store.servers.value!!.map { it.endpoint })
+    }
+
+    @Test fun detailLoaderAddressesTheRequestedServer() = runTest {
+        val socket = FakeSocket()
+        socket.handler = { _, args ->
+            assertEquals("h2:5001", args[0].jsonPrimitive.content)
+            when (args[1].jsonPrimitive.content) {
+                "serviceStatusList" -> j("""{"ok":true,"serviceStatusList":{}}""")
+                else -> j("""{"ok":true,"instances":[]}""")
+            }
+        }
+        StackDetailLoader.load(socket, "web", "h2:5001").getOrThrow()
+        assertEquals(2, socket.calls.size)
     }
 
     @Test fun detailLoaderAsksBothReadOnlyCallsForTheStack() = runTest {
@@ -86,7 +152,7 @@ class StackDataTest {
         manager.start(); runCurrent()
         sockets.getValue("https://a.example.com").push("agent", JsonPrimitive("stackList"), stackListPush("x", "y"))
         runCurrent()
-        assertEquals(listOf("x", "y"), manager.stackLists.value[a.id]!!.map { it.name })
+        assertEquals(listOf("x", "y"), manager.stackLists.value[a.id]!!.single().stacks.map { it.name })
         assertNull(manager.stackLists.value[b.id])
         repo.delete(a.id); runCurrent()
         assertNull(manager.stackLists.value[a.id])

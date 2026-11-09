@@ -105,7 +105,8 @@ private fun InstanceCard(row: InstanceRow, onClick: () -> Unit, onEdit: () -> Un
                     color = statusColor(s),
                 )
                 if (s == ConnectionState.Connected && row.stackCount != null) {
-                    Text("${row.stackCount} stacks, ${row.runningCount} running", style = MaterialTheme.typography.bodySmall)
+                    val servers = if (row.serverCount > 1) " on ${row.serverCount} servers" else ""
+                    Text("${row.stackCount} stacks$servers, ${row.runningCount} running", style = MaterialTheme.typography.bodySmall)
                 }
             }
             Box {

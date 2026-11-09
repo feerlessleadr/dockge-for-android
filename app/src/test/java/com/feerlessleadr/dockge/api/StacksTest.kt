@@ -27,7 +27,7 @@ class StacksTest {
     )
 
     @Test fun stackListIsParsedAndSortedIgnoringCase() {
-        val stacks = StackParser.parseStackList(stackListPush)!!
+        val stacks = StackParser.parseStackList(stackListPush)!!.stacks
         assertEquals(listOf("Db", "found", "web", "weird"), stacks.map { it.name })
         val web = stacks.first { it.name == "web" }
         assertEquals("Web Front", web.title)
@@ -38,7 +38,7 @@ class StacksTest {
     }
 
     @Test fun unmanagedExternalAndUnknownStatus() {
-        val stacks = StackParser.parseStackList(stackListPush)!!
+        val stacks = StackParser.parseStackList(stackListPush)!!.stacks
         val found = stacks.first { it.name == "found" }
         assertFalse(found.isManaged)
         assertTrue(found.isExternal)
@@ -57,7 +57,7 @@ class StacksTest {
         assertNull(StackParser.parseStackList(args("\"stackList\"")))
         assertNull(StackParser.parseStackList(args("\"stackList\"", "\"oops\"")))
         assertNull(StackParser.parseStackList(args("\"stackList\"", """{"ok":true}""")))
-        assertEquals(emptyList<Stack>(), StackParser.parseStackList(args("\"stackList\"", """{"ok":true,"stackList":{}}""")))
+        assertEquals(emptyList<Stack>(), StackParser.parseStackList(args("\"stackList\"", """{"ok":true,"stackList":{}}"""))!!.stacks)
     }
 
     @Test fun serviceStatus() {
@@ -104,5 +104,36 @@ class StacksTest {
         } catch (e: ApiException) {
             assertTrue(e.message!!.isNotBlank())
         }
+    }
+}
+
+class StacksFederationTest {
+    private fun args(vararg json: String): List<JsonElement> = json.map { Json.parseToJsonElement(it) }
+
+    @Test fun stackListCarriesTheEndpointOfItsServer() {
+        val local = StackParser.parseStackList(args("\"stackList\"", """{"ok":true,"endpoint":"","stackList":{"a":{"name":"a","status":3}}}"""))!!
+        val agent = StackParser.parseStackList(args("\"stackList\"", """{"ok":true,"endpoint":"host2:5001","stackList":{"a":{"name":"a","status":4}}}"""))!!
+        assertEquals("", local.endpoint)
+        assertEquals("host2:5001", agent.endpoint)
+        assertEquals("host2:5001", agent.stacks.single().endpoint)
+    }
+
+    @Test fun missingEndpointMeansTheInstanceItself() {
+        val push = StackParser.parseStackList(args("\"stackList\"", """{"ok":true,"stackList":{}}"""))!!
+        assertEquals("", push.endpoint)
+    }
+
+    @Test fun agentList() {
+        val list = StackParser.parseAgentList(
+            args("""{"ok":true,"agentList":{"":{"url":"","displayName":"Main"},"h2:5001":{"url":"https://h2","displayName":"","endpoint":"h2:5001"}}}"""),
+        )!!
+        assertEquals("Main", list.getValue("").displayName)
+        assertEquals("https://h2", list.getValue("h2:5001").url)
+        assertNull(StackParser.parseAgentList(args("""{"ok":true}""")))
+    }
+
+    @Test fun agentStatus() {
+        assertEquals("h2:5001" to "offline", StackParser.parseAgentStatus(args("""{"endpoint":"h2:5001","status":"offline"}""")))
+        assertNull(StackParser.parseAgentStatus(args("""{"status":"offline"}""")))
     }
 }

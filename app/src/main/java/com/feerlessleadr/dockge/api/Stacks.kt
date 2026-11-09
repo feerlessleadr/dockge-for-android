@@ -21,6 +21,8 @@ enum class StackStatus(val code: Int) {
 
 /** One entry of the pushed `stackList`. It has no per-container data. */
 data class Stack(
+    /** "" for the instance itself; otherwise the endpoint of a linked (federated) server. */
+    val endpoint: String,
     val name: String,
     val displayName: String,
     val status: StackStatus,
@@ -65,15 +67,20 @@ class ApiException(message: String) : Exception(message)
 
 /** Turns server payloads into typed values. Shapes: docs/dockge-api.md part B (from source, not live captures). */
 object StackParser {
-    /** Returns the stacks of a pushed `agent` / `stackList` event sorted by name, or null for any other event. */
-    fun parseStackList(args: List<JsonElement>): List<Stack>? {
+    /** The stacks one server pushed. [endpoint] is "" for the instance itself, or a linked server (federation). */
+    data class StackListPush(val endpoint: String, val stacks: List<Stack>)
+
+    /** Parses a pushed `agent` / `stackList` event (stacks sorted by name), or returns null for any other event. */
+    fun parseStackList(args: List<JsonElement>): StackListPush? {
         if (args.size < 2) return null
         if ((args[0] as? JsonPrimitive)?.contentOrNull != "stackList") return null
         val payload = args[1] as? JsonObject ?: return null
         val list = payload["stackList"] as? JsonObject ?: return null
-        return list.mapNotNull { (key, value) ->
+        val endpoint = payload.string("endpoint") ?: ""
+        val stacks = list.mapNotNull { (key, value) ->
             val obj = value as? JsonObject ?: return@mapNotNull null
             Stack(
+                endpoint = endpoint,
                 name = obj.string("name") ?: key,
                 displayName = obj.string("displayName") ?: "",
                 status = StackStatus.fromCode(obj.int("status")),
@@ -83,6 +90,27 @@ object StackParser {
                 lastUpdated = obj.instant("lastUpdated"),
             )
         }.sortedBy { it.name.lowercase() }
+        return StackListPush(endpoint, stacks)
+    }
+
+    /** A linked server from the pushed `agentList` (the instance itself is the entry with the empty endpoint). */
+    data class AgentInfo(val endpoint: String, val displayName: String, val url: String)
+
+    fun parseAgentList(args: List<JsonElement>): Map<String, AgentInfo>? {
+        val payload = args.firstOrNull() as? JsonObject ?: return null
+        val list = payload["agentList"] as? JsonObject ?: return null
+        return list.mapNotNull { (key, value) ->
+            val obj = value as? JsonObject ?: return@mapNotNull null
+            key to AgentInfo(key, obj.string("displayName") ?: "", obj.string("url") ?: "")
+        }.toMap()
+    }
+
+    /** The pushed `agentStatus`: ("endpoint", "online" | "offline" | "connecting"). */
+    fun parseAgentStatus(args: List<JsonElement>): Pair<String, String>? {
+        val payload = args.firstOrNull() as? JsonObject ?: return null
+        val endpoint = payload.string("endpoint") ?: return null
+        val status = payload.string("status") ?: return null
+        return endpoint to status
     }
 
     /** Parses the acknowledgement of `serviceStatusList`. */

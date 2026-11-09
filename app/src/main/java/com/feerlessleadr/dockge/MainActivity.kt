@@ -20,6 +20,12 @@ import com.feerlessleadr.dockge.ui.stacks.StackListScreen
 import com.feerlessleadr.dockge.ui.theme.DockgeTheme
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        // Coming back after the screen was off: sockets may be half dead, so check them and rebuild stale ones.
+        (application as DockgeApp).container.sessions.recover()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -53,16 +59,21 @@ private fun AppNav() {
             val iid = entry.arguments?.getString("iid") ?: return@composable
             StackListScreen(
                 vm = vm, instanceId = iid, onBack = { nav.popBackStack() },
-                onOpen = { name -> nav.navigate("stack/${Uri.encode(iid)}/${Uri.encode(name)}") },
+                onOpen = { endpoint, name -> nav.navigate("stack/${Uri.encode(iid)}/${Uri.encode(name)}?endpoint=${Uri.encode(endpoint)}") },
             )
         }
         composable(
-            route = "stack/{iid}/{name}",
-            arguments = listOf(navArgument("iid") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType }),
+            route = "stack/{iid}/{name}?endpoint={endpoint}",
+            arguments = listOf(
+                navArgument("iid") { type = NavType.StringType },
+                navArgument("name") { type = NavType.StringType },
+                navArgument("endpoint") { type = NavType.StringType; defaultValue = "" },
+            ),
         ) { entry ->
             val iid = entry.arguments?.getString("iid") ?: return@composable
             val name = entry.arguments?.getString("name") ?: return@composable
-            StackDetailScreen(vm = vm, instanceId = iid, stackName = name, onBack = { nav.popBackStack() })
+            val endpoint = entry.arguments?.getString("endpoint") ?: ""
+            StackDetailScreen(vm = vm, instanceId = iid, endpoint = endpoint, stackName = name, onBack = { nav.popBackStack() })
         }
     }
 }

@@ -1,6 +1,6 @@
 # STATUS (2026-11-05)
 
-**Phase:** M3 code done on branch m3-stacks (64 unit tests pass); phone check pending. Next: M4 (actions; needs a disposable stack on the isolated test VM).
+**Phase:** M3 plus two fixes (federated instances, wake-from-sleep) on branch m3-stacks, PR 7; 79 unit tests pass; owner re-test pending. Next: M4.
 
 ## Done
 - Project registered in WORKSPACE.md; CLAUDE.md, STATUS.md, DECISIONS.md created.

@@ -41,18 +41,18 @@ private data class Loaded(val detail: StackDetail, val at: Instant)
 /** Read-only view of one stack: containers with state, health, image, uptime and ports. Refreshes every 10 s. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, stackName: String, onBack: () -> Unit) {
-    val stacks by vm.stacks(instanceId).collectAsState(initial = null)
-    val stack = stacks?.firstOrNull { it.name == stackName }
+fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: String, stackName: String, onBack: () -> Unit) {
+    val servers by vm.stacks(instanceId).collectAsState(initial = null)
+    val stack = servers?.firstOrNull { it.endpoint == endpoint }?.stacks?.firstOrNull { it.name == stackName }
 
     var loaded by remember { mutableStateOf<Loaded?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var manualRefresh by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(instanceId, stackName, manualRefresh) {
+    LaunchedEffect(instanceId, endpoint, stackName, manualRefresh) {
         while (true) {
-            vm.loadDetail(instanceId, stackName)
+            vm.loadDetail(instanceId, endpoint, stackName)
                 .onSuccess { loaded = Loaded(it, Instant.now()); error = null }
                 .onFailure { error = it.message ?: "Could not load this stack." }
             refreshing = false
