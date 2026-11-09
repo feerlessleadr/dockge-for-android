@@ -67,6 +67,9 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun submitCode(id: String, code: String) = container.sessions.session(id)?.submitCode(code)
 
+    /** The diagnostics log of one instance (debug builds show it). */
+    fun log(id: String) = container.sessions.log(id)
+
     /** The connection state of one instance (for banners on the stack screens). */
     fun connection(id: String): Flow<ConnectionState> = container.sessions.states.map { it[id] ?: ConnectionState.Disconnected }
 

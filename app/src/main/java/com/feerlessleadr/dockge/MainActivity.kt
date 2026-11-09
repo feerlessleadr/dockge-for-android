@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.feerlessleadr.dockge.ui.instances.DiagnosticsScreen
 import com.feerlessleadr.dockge.ui.instances.InstanceEditScreen
 import com.feerlessleadr.dockge.ui.instances.InstanceListScreen
 import com.feerlessleadr.dockge.ui.instances.InstancesViewModel
@@ -44,6 +45,7 @@ private fun AppNav() {
                 onAdd = { nav.navigate("edit") },
                 onEdit = { nav.navigate("edit?id=$it") },
                 onOpen = { nav.navigate("stacks/${Uri.encode(it)}") },
+                onDiagnostics = { nav.navigate("diag/${Uri.encode(it)}") },
             )
         }
         composable(
@@ -51,6 +53,13 @@ private fun AppNav() {
             arguments = listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null }),
         ) { entry ->
             InstanceEditScreen(vm = vm, id = entry.arguments?.getString("id"), onDone = { nav.popBackStack() })
+        }
+        composable(
+            route = "diag/{iid}",
+            arguments = listOf(navArgument("iid") { type = NavType.StringType }),
+        ) { entry ->
+            val iid = entry.arguments?.getString("iid") ?: return@composable
+            DiagnosticsScreen(vm = vm, instanceId = iid, onBack = { nav.popBackStack() })
         }
         composable(
             route = "stacks/{iid}",

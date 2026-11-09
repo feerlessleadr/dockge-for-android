@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,17 +77,41 @@ class StackDataTest {
         assertEquals("offline", servers[1].status)
     }
 
-    @Test fun removedServerIsDropped() = runTest {
+    /** A key written differently in agentList and stackList must never hide a server. */
+    @Test fun agentListNeverHidesAServerThatPushedItsStacks() = runTest {
         val socket = FakeSocket()
         val store = StackListStore(socket, backgroundScope)
         runCurrent()
         socket.push("agent", JsonPrimitive("stackList"), pushFor("", "a"))
         socket.push("agent", JsonPrimitive("stackList"), pushFor("h2:5001", "x"))
         runCurrent()
-        assertEquals(2, store.servers.value!!.size)
-        socket.push("agentList", j("""{"ok":true,"agentList":{"":{"displayName":""}}}"""))
+        socket.push("agentList", j("""{"ok":true,"agentList":{"":{"displayName":""},"h2":{"displayName":"Media"}}}"""))
         runCurrent()
-        assertEquals(listOf(""), store.servers.value!!.map { it.endpoint })
+        assertEquals(listOf("", "h2:5001"), store.servers.value!!.map { it.endpoint })
+    }
+
+    @Test fun storeLogsWhatItReceivedWithoutBodies() = runTest {
+        val socket = FakeSocket()
+        val log = EventLog(clock = { 0L })
+        StackListStore(socket, backgroundScope, log)
+        runCurrent()
+        socket.push("agent", JsonPrimitive("stackList"), pushFor("h2:5001", "x", "y"))
+        socket.push("agent", JsonPrimitive("terminalWrite"), JsonPrimitive("secret output"))
+        socket.push("agent", JsonPrimitive("terminalWrite"), JsonPrimitive("more"))
+        socket.push("agentStatus", j("""{"endpoint":"h2:5001","status":"offline"}"""))
+        runCurrent()
+        val text = log.lines.value.joinToString(" | ")
+        assertTrue(text.contains("stackList endpoint=\"h2:5001\" stacks=2"))
+        assertTrue(text.contains("agentStatus endpoint=\"h2:5001\" status=offline"))
+        assertEquals("terminalWrite is noted once, by name only", 1, log.lines.value.count { it.contains("terminalWrite") })
+        assertFalse(text.contains("secret output"))
+    }
+
+    @Test fun eventLogKeepsTheNewestLinesFirstAndIsBounded() {
+        var t = 0L
+        val log = EventLog(capacity = 3, clock = { t })
+        listOf("a", "b", "c", "d").forEach { log.add(it); t += 1000 }
+        assertEquals(listOf("d", "c", "b"), log.lines.value.map { it.substringAfter(" ") })
     }
 
     @Test fun detailLoaderAddressesTheRequestedServer() = runTest {

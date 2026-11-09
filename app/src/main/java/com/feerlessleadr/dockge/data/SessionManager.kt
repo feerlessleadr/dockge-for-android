@@ -1,7 +1,6 @@
 package com.feerlessleadr.dockge.data
 
 import com.feerlessleadr.dockge.api.DockgeSocket
-
 import com.feerlessleadr.dockge.core.BaseUrl
 import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.core.TokenVault
@@ -34,6 +33,7 @@ class SessionManager(
     )
 
     private val entries = mutableMapOf<String, Entry>()
+    private val logs = mutableMapOf<String, EventLog>()
     private var followJob: Job? = null
 
     private val _states = MutableStateFlow<Map<String, ConnectionState>>(emptyMap())
@@ -53,23 +53,32 @@ class SessionManager(
 
     fun session(id: String): InstanceSession? = entries[id]?.session
 
+    /** The diagnostics log of one instance; it survives reconnects and is dropped when the instance is deleted. */
+    fun log(id: String): EventLog? = logs[id]
+
     /**
      * Call when the app comes to the foreground or the network comes back. A phone that slept can leave sockets half
      * dead, so instances that are not connected get a fresh socket, and connected ones are checked first.
-     * Instances waiting for a password or code are left alone.
+     * Instances waiting for a password or code are left alone. A socket younger than [minAgeMs] is still trying and
+     * is not restarted (so the app start does not open every connection twice).
      */
-    fun recover() {
+    fun recover(minAgeMs: Long = RECOVER_GRACE_MS) {
         for (id in entries.keys.toList()) {
             when (_states.value[id]) {
                 ConnectionState.Connected -> scope.launch {
                     val session = entries[id]?.session ?: return@launch
-                    if (!session.verify()) reconnect(id)
+                    if (!session.verify()) {
+                        logs[id]?.add("recover: connection did not answer, rebuilding")
+                        reconnect(id)
+                    }
                 }
                 is ConnectionState.NeedsLogin, is ConnectionState.NeedsTwoFactor, ConnectionState.LoggingIn -> Unit
                 else -> {
-                    // A socket opened a moment ago (for example at app start) is still trying; do not restart it.
                     val opened = entries[id]?.openedAt ?: continue
-                    if (clock() - opened >= RECOVER_GRACE_MS) reconnect(id)
+                    if (clock() - opened >= minAgeMs) {
+                        logs[id]?.add("recover: not connected, rebuilding")
+                        reconnect(id)
+                    }
                 }
             }
         }
@@ -89,6 +98,7 @@ class SessionManager(
     private fun sync(list: List<Instance>) {
         val ids = list.map { it.id }.toSet()
         entries.keys.filter { it !in ids }.forEach(::remove)
+        logs.keys.filter { it !in ids }.forEach(logs::remove)
         for (instance in list) {
             val entry = entries[instance.id]
             when {
@@ -106,12 +116,19 @@ class SessionManager(
             _states.update { it + (instance.id to ConnectionState.Failed("The saved address is not valid.")) }
             return
         }
+        val log = logs.getOrPut(instance.id) { EventLog() }
+        log.add("socket opened")
         val socket = socketFactory(url)
         // The store listens before the session starts: the server pushes the first list right after login.
-        val store = StackListStore(socket, scope)
+        val store = StackListStore(socket, scope, log)
         val session = InstanceSession(instance.id, socket, vault, scope)
         val collectors = listOf(
-            scope.launch { session.state.collect { s -> _states.update { it + (instance.id to s) } } },
+            scope.launch {
+                session.state.collect { s ->
+                    log.add("state: $s")
+                    _states.update { it + (instance.id to s) }
+                }
+            },
             scope.launch { store.servers.collect { list -> if (list != null) _stackLists.update { it + (instance.id to list) } } },
         )
         entries[instance.id] = Entry(instance.baseUrl, session, store, collectors, clock())

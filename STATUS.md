@@ -1,6 +1,6 @@
 # STATUS (2026-11-05)
 
-**Phase:** M3 plus two fixes (federated instances, wake-from-sleep) on branch m3-stacks, PR 7; 79 unit tests pass; owner re-test pending. Next: M4.
+**Phase:** M3 on branch m3-stacks, PR 7. Owner re-test showed the federated list is still wrong and sleep recovery is slow; diagnostics added to find out why. 81 unit tests pass.
 
 ## Done
 - Project registered in WORKSPACE.md; CLAUDE.md, STATUS.md, DECISIONS.md created.

@@ -35,7 +35,9 @@ data class ServerStacks(
  * The server pushes the first lists right after login, so this must be listening before the login happens.
  * Null means "nothing received yet".
  */
-class StackListStore(socket: DockgeSocket, scope: CoroutineScope) {
+class StackListStore(socket: DockgeSocket, scope: CoroutineScope, private val log: EventLog? = null) {
+    private val otherAgentEvents = mutableSetOf<String>()
+
     private val lists = MutableStateFlow<Map<String, List<Stack>>>(emptyMap())
     private val names = MutableStateFlow<Map<String, String>>(emptyMap())
     private val statuses = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -45,18 +47,24 @@ class StackListStore(socket: DockgeSocket, scope: CoroutineScope) {
     private val jobs: List<Job> = listOf(
         scope.launch {
             socket.events("agent").collect { args ->
-                StackParser.parseStackList(args)?.let { push ->
+                val push = StackParser.parseStackList(args)
+                if (push != null) {
+                    log?.add("stackList endpoint=\"${push.endpoint}\" stacks=${push.stacks.size} ${push.stacks.take(3).joinToString(prefix = "[", postfix = "]") { it.name }}")
                     lists.update { it + (push.endpoint to push.stacks) }
                     publish()
+                } else {
+                    val name = (args.firstOrNull() as? kotlinx.serialization.json.JsonPrimitive)?.content
+                    if (name != null && otherAgentEvents.add(name)) log?.add("agent event \"$name\" (first seen)")
                 }
             }
         },
         scope.launch {
             socket.events("agentList").collect { args ->
                 StackParser.parseAgentList(args)?.let { list ->
+                    log?.add("agentList keys=${list.keys.map { "\"$it\"" }}")
                     names.value = list.mapValues { (endpoint, info) -> info.displayName.ifBlank { info.url.ifBlank { endpoint } } }
-                    // A server that was removed from the instance must not linger.
-                    lists.update { current -> current.filterKeys { it.isEmpty() || it in list } }
+                    // Lists are kept even for keys missing here: a removed server may linger until reconnect, but a
+                    // key written differently in the two events must never hide a server.
                     publish()
                 }
             }
@@ -64,6 +72,7 @@ class StackListStore(socket: DockgeSocket, scope: CoroutineScope) {
         scope.launch {
             socket.events("agentStatus").collect { args ->
                 StackParser.parseAgentStatus(args)?.let { (endpoint, status) ->
+                    log?.add("agentStatus endpoint=\"$endpoint\" status=$status")
                     statuses.update { it + (endpoint to status) }
                     publish()
                 }
