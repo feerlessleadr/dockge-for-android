@@ -26,3 +26,10 @@
 ### M1 live check (2026-11-05, owner's real phone, debug build, isolated test VM instance)
 - Verified by the owner: address accepted; password then TOTP login accepted; state reached "connected" and the stack count and names appeared; a wrong password and a wrong code each showed the matching error.
 - Still NOT verified: token login after an app restart or reconnect (loginByToken on a live server), a revoked token on a live server, rate-limit message on a live server, Keystore vault behavior after reboot, release (R8) APK at runtime, instances without 2FA.
+
+## 2026-11-06, M2 (branch m2-instances)
+- Owner reported after M1 that the server URL and credentials were gone after closing the app. Cause: the M1 debug screen did not save the address, and the password is never stored by design (only the session token is). M2 fixes the part that was a gap: instances (name, color, address) are now saved on disk and reconnect with their saved token when the app starts.
+- Added: `Instance` and `PrefsInstanceStore` (JSON in SharedPreferences, committed before returning), `InstanceRepository` (validation, add, edit, delete; changing the address deletes the saved token so it is never sent to another server; delete removes the token), `SessionManager` (one session per instance, follows the repository), `AppContainer`/`DockgeApp` (sessions start when the process starts), instance list with status, add/edit screen with color picker and delete confirm, sign-in dialog (password, then code), Retry connection, Sign out. The M1 debug screen is removed.
+- Verified: 49 unit tests pass (repository persistence and validation, token handling on edit and delete, session manager with several instances, add, delete, rename, address change, reconnect, sign out). Debug and release (R8) builds succeed.
+- NOT verified: the screens on a device; persistence after closing the app and rebooting the phone; reconnect after losing the network; two live instances at once; Keystore token after a reboot.
+- Reconnect uses the Socket.IO library's built-in backoff (1 s growing to 30 s); the card shows "Can't connect" with the reason while it retries, and Retry rebuilds the socket.

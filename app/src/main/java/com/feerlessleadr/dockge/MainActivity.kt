@@ -4,41 +4,43 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import com.feerlessleadr.dockge.ui.debug.DebugScreen
+import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.feerlessleadr.dockge.ui.instances.InstanceEditScreen
+import com.feerlessleadr.dockge.ui.instances.InstanceListScreen
+import com.feerlessleadr.dockge.ui.instances.InstancesViewModel
 import com.feerlessleadr.dockge.ui.theme.DockgeTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            DockgeTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
-                    if (BuildConfig.DEBUG) {
-                        DebugScreen(Modifier.padding(padding))
-                        return@Scaffold
-                    }
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(stringResource(R.string.placeholder_title), style = MaterialTheme.typography.headlineMedium)
-                        Text(stringResource(R.string.placeholder_body), style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
+        setContent { DockgeTheme { AppNav() } }
+    }
+}
+
+@Composable
+private fun AppNav() {
+    val nav = rememberNavController()
+    val vm: InstancesViewModel = viewModel()
+    NavHost(navController = nav, startDestination = "list") {
+        composable("list") {
+            InstanceListScreen(
+                vm = vm,
+                onAdd = { nav.navigate("edit") },
+                onEdit = { nav.navigate("edit?id=$it") },
+            )
+        }
+        composable(
+            route = "edit?id={id}",
+            arguments = listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null }),
+        ) { entry ->
+            InstanceEditScreen(vm = vm, id = entry.arguments?.getString("id"), onDone = { nav.popBackStack() })
         }
     }
 }
