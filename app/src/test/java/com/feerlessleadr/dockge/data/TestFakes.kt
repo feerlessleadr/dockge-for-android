@@ -32,8 +32,12 @@ internal class FakeSocket : DockgeSocket {
         stateFlow.value = SocketState.Disconnected
     }
 
+    /** For tests that need a call that suspends (never answers, or answers later). */
+    var suspendHandler: (suspend (String, List<JsonElement>) -> JsonElement)? = null
+
     override suspend fun call(event: String, args: List<JsonElement>, timeoutMs: Long): JsonElement {
         calls += event to args
+        suspendHandler?.let { return it(event, args) }
         return handler(event, args)
     }
 

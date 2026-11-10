@@ -3,15 +3,35 @@ package com.feerlessleadr.dockge.ui.stacks
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.layout.Row
+import com.feerlessleadr.dockge.data.Action
+import com.feerlessleadr.dockge.data.ActionOutcome
+import com.feerlessleadr.dockge.data.ContainerAction
+import com.feerlessleadr.dockge.data.ConnectionState
+import com.feerlessleadr.dockge.data.StackAction
+import com.feerlessleadr.dockge.ui.instances.ActionKey
+import com.feerlessleadr.dockge.ui.instances.ActionUi
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -39,7 +59,7 @@ private const val REFRESH_MS = 10_000L
 private data class Loaded(val detail: StackDetail, val at: Instant)
 
 /** Read-only view of one stack: containers with state, health, image, uptime and ports. Refreshes every 10 s. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: String, stackName: String, onBack: () -> Unit) {
     val servers by vm.stacks(instanceId).collectAsState(initial = null)
@@ -49,6 +69,23 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var manualRefresh by remember { mutableIntStateOf(0) }
+
+    val connection by vm.connection(instanceId).collectAsState(initial = ConnectionState.Connecting)
+    val server = servers?.firstOrNull { it.endpoint == endpoint }
+    val actionUi by vm.action.collectAsState()
+    val mine = actionUi?.takeIf { it.key == ActionKey(instanceId, endpoint, stackName) }
+    val anyRunning = actionUi?.state?.running == true
+    // Writes only while connected, and not to a linked server that this instance reports as offline.
+    val canAct = connection == ConnectionState.Connected && server?.status != "offline" && !anyRunning
+    var confirming by remember { mutableStateOf<Pending?>(null) }
+    var showSheet by rememberSaveable { mutableStateOf(false) }
+    // Runs the action now, or asks first when it has a warning.
+    fun request(a: Action, target: String, run: () -> Unit) {
+        if (a.warning == null) { run(); showSheet = true } else confirming = Pending(a, target, run)
+    }
+
+    // When an action ends, reload the containers instead of waiting for the next 10 s refresh.
+    LaunchedEffect(mine?.state?.outcome) { if (mine?.state?.outcome != null) manualRefresh++ }
 
     LaunchedEffect(instanceId, endpoint, stackName, manualRefresh) {
         while (true) {
@@ -85,6 +122,29 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                         error?.let { Text("$it Showing the last data.", color = MaterialTheme.colorScheme.error) }
                     }
                 }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            StackAction.entries.forEach { a ->
+                                FilledTonalButton(
+                                    enabled = canAct,
+                                    onClick = { request(a, stack?.title ?: stackName) { vm.runAction(instanceId, endpoint, stackName, a) } },
+                                ) { Text(a.label) }
+                            }
+                        }
+                        if (!canAct && !anyRunning) {
+                            Text(
+                                if (connection != ConnectionState.Connected) "Actions are available when this instance is connected."
+                                else "Actions are not available while this server is offline.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (anyRunning && mine == null) Text("Another action is running. Wait for it to finish.", style = MaterialTheme.typography.bodySmall)
+                        if (mine != null && !showSheet) {
+                            TextButton(onClick = { showSheet = true }) { Text(actionTitle(mine)) }
+                        }
+                    }
+                }
                 if (data == null) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -105,6 +165,18 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                                 if (c.image.isNotBlank()) Text("Image: ${c.image}", style = MaterialTheme.typography.bodyMedium)
                                 if (c.isRunning) Text("Uptime: ${Uptime.format(c.startedAt, data.at)}", style = MaterialTheme.typography.bodyMedium)
                                 if (c.ports.isNotEmpty()) Text("Ports: ${c.ports.joinToString(", ")}", style = MaterialTheme.typography.bodyMedium)
+                                val shown = if (c.isRunning) listOf(ContainerAction.Restart, ContainerAction.Stop) else listOf(ContainerAction.Start)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    shown.forEach { a ->
+                                        TextButton(
+                                            enabled = canAct,
+                                            onClick = {
+                                                val label = c.name.ifBlank { c.service }
+                                                request(a, label) { vm.runContainerAction(instanceId, endpoint, stackName, c.id, label, a) }
+                                            },
+                                        ) { Text(a.label) }
+                                    }
+                                }
                             }
                         }
                     }
@@ -112,4 +184,53 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
             }
         }
     }
+
+    confirming?.let { p ->
+        val where = listOfNotNull(vm.get(instanceId)?.name, server?.name?.takeIf { endpoint.isNotEmpty() }).joinToString(" / ")
+        AlertDialog(
+            onDismissRequest = { confirming = null },
+            title = { Text("${p.action.label} ${p.target}?") },
+            text = { Text("On $where.\n\n${p.action.warning}") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirming = null
+                    p.run()
+                    showSheet = true
+                }) { Text(p.action.label) }
+            },
+            dismissButton = { TextButton(onClick = { confirming = null }) { Text("Cancel") } },
+        )
+    }
+
+    if (mine != null && showSheet) {
+        val scroll = rememberScrollState()
+        LaunchedEffect(mine.state.output) { scroll.animateScrollTo(scroll.maxValue) }
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false; vm.dismissAction() },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(actionTitle(mine), style = MaterialTheme.typography.titleMedium)
+                (mine.state.outcome as? ActionOutcome.Failed)?.let { Text(it.message, color = MaterialTheme.colorScheme.error) }
+                if (mine.state.running) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(
+                    mine.state.output.ifBlank { if (mine.state.running) "Waiting for output..." else "No output." },
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(scroll),
+                )
+                TextButton(onClick = { showSheet = false; vm.dismissAction() }, modifier = Modifier.align(Alignment.End)) {
+                    Text(if (mine.state.running) "Hide" else "Close")
+                }
+            }
+        }
+    }
+}
+
+private class Pending(val action: Action, val target: String, val run: () -> Unit)
+
+private fun actionTitle(ui: ActionUi): String = when (ui.state.outcome) {
+    null -> "${ui.action.doing} ${ui.target}..."
+    ActionOutcome.Done -> "${ui.action.label} finished: ${ui.target}"
+    is ActionOutcome.Failed -> "${ui.action.label} failed: ${ui.target}"
 }
