@@ -61,9 +61,10 @@ class StackActionTest {
 
     @Test fun everyActionMapsToItsDockgeEvent() {
         assertEquals(
-            listOf("startStack", "restartStack", "stopStack", "downStack"),
+            listOf("startStack", "restartStack", "stopStack", "downStack", "updateStack"),
             StackAction.entries.map { it.event },
         )
+        assertTrue("Update always asks first", StackAction.Update.warning != null)
         assertEquals("Start has no confirm dialog", null, StackAction.Start.warning)
         assertTrue(StackAction.entries.filter { it != StackAction.Start }.all { it.warning != null })
     }
@@ -89,6 +90,21 @@ class StackActionTest {
             j("""{"ok":true}""")
         }
         assertEquals("a\n", StackActionRunner.run(socket, "web", "h2:5001", StackAction.Start).last().output)
+    }
+
+    @Test fun updateIsAcknowledgedAsRollingUpdateWhenTheServerSaysPending() = runTest {
+        val socket = connectedSocket()
+        socket.handler = { _, _ -> j("""{"ok":true,"msg":"serviceRollout.pending","msgi18n":true}""") }
+        val last = StackActionRunner.run(socket, "web", "", StackAction.Update).last()
+        assertEquals(ActionOutcome.RolloutPending, last.outcome)
+        assertEquals("updateStack", socket.calls.single().second[1].jsonPrimitive.content)
+    }
+
+    @Test fun updateRefusedWhileAnotherUpdateRunsShowsTheServersReason() = runTest {
+        val socket = connectedSocket()
+        socket.handler = { _, _ -> j("""{"ok":false,"msg":"Another Docker update is active; retry later"}""") }
+        val last = StackActionRunner.run(socket, "web", "", StackAction.Update).last()
+        assertEquals(ActionOutcome.Failed("Another Docker update is active; retry later"), last.outcome)
     }
 
     @Test fun serverErrorBecomesAFailure() = runTest {

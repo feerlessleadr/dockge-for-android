@@ -6,7 +6,12 @@ import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.core.TokenVault
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import com.feerlessleadr.dockge.api.ServerUpdates
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -28,6 +33,7 @@ class SessionManager(
         val baseUrl: String,
         val session: InstanceSession,
         val stackStore: StackListStore,
+        val updateStore: UpdateStatusStore,
         val collectors: List<Job>,
         val openedAt: Long,
     )
@@ -45,6 +51,19 @@ class SessionManager(
 
     /** Last received stack lists per instance id, one entry per server (the instance itself and any linked servers). Absent until the first push. */
     val stackLists: StateFlow<Map<String, List<ServerStacks>>> = _stackLists.asStateFlow()
+
+    private val _updates = MutableStateFlow<Map<String, Map<String, ServerUpdates>>>(emptyMap())
+
+    /** The image watcher's result per instance id and server endpoint. Absent until the first successful refresh. */
+    val updates: StateFlow<Map<String, Map<String, ServerUpdates>>> = _updates.asStateFlow()
+
+    /** Asks every online server of one instance for its update status now (read only). */
+    suspend fun refreshUpdates(id: String) {
+        val entry = entries[id] ?: return
+        val servers = entry.stackStore.servers.value ?: return
+        entry.updateStore.refresh(servers.filter { it.status != "offline" }.map { it.endpoint })
+        if (entries[id] === entry) _updates.update { it + (id to entry.updateStore.byServer.value) }
+    }
 
     fun start() {
         if (followJob != null) return
@@ -93,6 +112,9 @@ class SessionManager(
 
     private companion object {
         const val RECOVER_GRACE_MS = 10_000L
+
+        /** The server's own scan runs every 6 h by default, so asking more often than this gains nothing. */
+        const val UPDATE_REFRESH_MS = 5 * 60_000L
     }
 
     private fun sync(list: List<Instance>) {
@@ -121,6 +143,7 @@ class SessionManager(
         val socket = socketFactory(url)
         // The store listens before the session starts: the server pushes the first list right after login.
         val store = StackListStore(socket, scope, log)
+        val updateStore = UpdateStatusStore(socket, log)
         val session = InstanceSession(instance.id, socket, vault, scope)
         val collectors = listOf(
             scope.launch {
@@ -130,8 +153,20 @@ class SessionManager(
                 }
             },
             scope.launch { store.servers.collect { list -> if (list != null) _stackLists.update { it + (instance.id to list) } } },
+            // While connected: ask for update status once the server list is known, then every few minutes.
+            scope.launch {
+                session.state.collectLatest { s ->
+                    if (s == ConnectionState.Connected) {
+                        store.servers.filterNotNull().first()
+                        while (true) {
+                            refreshUpdates(instance.id)
+                            delay(UPDATE_REFRESH_MS)
+                        }
+                    }
+                }
+            },
         )
-        entries[instance.id] = Entry(instance.baseUrl, session, store, collectors, clock())
+        entries[instance.id] = Entry(instance.baseUrl, session, store, updateStore, collectors, clock())
         session.start()
     }
 
@@ -143,5 +178,6 @@ class SessionManager(
         }
         _states.update { it - id }
         _stackLists.update { it - id }
+        _updates.update { it - id }
     }
 }
