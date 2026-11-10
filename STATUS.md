@@ -1,6 +1,6 @@
 # STATUS (2026-11-10)
 
-**Phase:** M4 (actions) is built on branch m4-actions and waiting for the owner's device test. M0 to M3 are merged (M3 as PR 7). 98 unit tests pass; debug and release (R8) builds succeed. Nothing in M4 has been run against a real server yet.
+**Phase:** M4 (actions) is built on branch m4-actions (PR 8). Owner tested every action on `whoami` (test instance): all worked. One UI bug (stale "Not connected" after returning to the app) is fixed in the latest commit, awaiting a re-check. 98 unit tests pass.
 
 ## Done
 - Project registered in WORKSPACE.md; repo, branch protection (PR + `build-and-test`, admins enforced), release keystore and 4 repo secrets in place.
@@ -10,7 +10,7 @@
 - Timeouts: stack actions 10 min, container actions 60 s. If no ack comes, or the connection drops, the sheet says the server may still be running it and to check the stack.
 
 ## Next action
-- Owner installs the M4 debug build and tests ONLY the `whoami` stack on the isolated test VM instance (see "Owner test" below). Then merge PR (owner's go-ahead) and start M5 (updates).
+- Owner re-checks the leave-and-return case on the new build (connection error on the detail screen should clear by itself). Then merge PR 8 (owner go-ahead) and start M5 (updates).
 
 ## Owner test (M4), only on the test instance, stack `whoami`
 1. Open whoami; tap Stop, confirm; sheet shows output, "Stop finished"; status becomes stopped.

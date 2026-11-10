@@ -56,6 +56,9 @@ import java.time.Instant
 
 private const val REFRESH_MS = 10_000L
 
+/** After a failed load, try again sooner. */
+private const val RETRY_MS = 3_000L
+
 private data class Loaded(val detail: StackDetail, val at: Instant)
 
 /** Read-only view of one stack: containers with state, health, image, uptime and ports. Refreshes every 10 s. */
@@ -87,13 +90,16 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     // When an action ends, reload the containers instead of waiting for the next 10 s refresh.
     LaunchedEffect(mine?.state?.outcome) { if (mine?.state?.outcome != null) manualRefresh++ }
 
-    LaunchedEffect(instanceId, endpoint, stackName, manualRefresh) {
+    // Keyed on the connection too: when the instance reconnects (for example after the phone slept) the loop starts
+    // again at once instead of showing the old "Not connected" error until the next tick.
+    LaunchedEffect(instanceId, endpoint, stackName, manualRefresh, connection) {
         while (true) {
-            vm.loadDetail(instanceId, endpoint, stackName)
+            val result = vm.loadDetail(instanceId, endpoint, stackName)
+            result
                 .onSuccess { loaded = Loaded(it, Instant.now()); error = null }
                 .onFailure { error = it.message ?: "Could not load this stack." }
             refreshing = false
-            delay(REFRESH_MS)
+            delay(if (result.isSuccess) REFRESH_MS else RETRY_MS)
         }
     }
 
