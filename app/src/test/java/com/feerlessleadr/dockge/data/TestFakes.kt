@@ -8,7 +8,9 @@ import com.feerlessleadr.dockge.core.TokenVault
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonElement
 
 internal class FakeSocket : DockgeSocket {
@@ -35,7 +37,11 @@ internal class FakeSocket : DockgeSocket {
         return handler(event, args)
     }
 
-    override fun events(event: String): Flow<List<JsonElement>> = emptyFlow()
+    val pushes = MutableSharedFlow<Pair<String, List<JsonElement>>>(extraBufferCapacity = 64)
+
+    override fun events(event: String): Flow<List<JsonElement>> = pushes.filter { it.first == event }.map { it.second }
+
+    fun push(event: String, vararg args: JsonElement) { pushes.tryEmit(event to args.toList()) }
 
     fun reconnect() {
         stateFlow.value = SocketState.Disconnected

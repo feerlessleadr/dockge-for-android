@@ -10,6 +10,7 @@ import com.feerlessleadr.dockge.api.TokenLoginResult
 import com.feerlessleadr.dockge.core.TokenVault
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +37,7 @@ sealed interface ConnectionState {
  */
 class InstanceSession(
     private val instanceId: String,
-    private val socket: DockgeSocket,
+    val socket: DockgeSocket,
     private val vault: TokenVault,
     private val scope: CoroutineScope,
 ) {
@@ -60,6 +61,7 @@ class InstanceSession(
     }
 
     fun stop() {
+        retryJob?.cancel()
         job?.cancel()
         job = null
         pending = null
@@ -143,7 +145,7 @@ class InstanceSession(
         }
     }
 
-    private suspend fun onConnected(connected: SocketState.Connected) {
+    private suspend fun onConnected(connected: SocketState.Connected, attempt: Int = 0) {
         authLock.withLock {
             if (socket.state.value != connected) return
             val token = vault.get(instanceId)
@@ -166,7 +168,41 @@ class InstanceSession(
                 }
             } catch (e: SocketCallException) {
                 _state.value = ConnectionState.Failed(e.message ?: "No answer from the server.")
+                scheduleRetry(connected, attempt + 1)
             }
         }
+    }
+
+    private var retryJob: Job? = null
+
+    /**
+     * A connected socket that does not answer the token login (typical right after the phone wakes up, when the old
+     * connection is half dead) must not stay failed: ask again with a growing delay. A new connect event restarts it.
+     */
+    private fun scheduleRetry(connected: SocketState.Connected, attempt: Int = 1) {
+        retryJob?.cancel()
+        if (attempt > MAX_RETRIES) return
+        retryJob = scope.launch {
+            delay(minOf(2_000L shl (attempt - 1), 30_000L))
+            if (socket.state.value != connected || _state.value !is ConnectionState.Failed) return@launch
+            onConnected(connected, attempt)
+        }
+    }
+
+    /**
+     * Checks that a connection that looks fine still works (the phone may have slept). Returns false when the server
+     * does not answer in [timeoutMs], so the caller can rebuild the socket. A session with no token is fine as is.
+     */
+    suspend fun verify(timeoutMs: Long = 5_000L): Boolean {
+        val token = vault.get(instanceId) ?: return true
+        return try {
+            auth.loginByToken(token, timeoutMs) == TokenLoginResult.Ok
+        } catch (e: SocketCallException) {
+            false
+        }
+    }
+
+    private companion object {
+        const val MAX_RETRIES = 6
     }
 }

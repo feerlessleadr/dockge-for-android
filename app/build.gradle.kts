@@ -19,6 +19,13 @@ android {
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
+        // Shown in the app so a tester can tell which build is installed.
+        val gitSha = try {
+            providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }.standardOutput.asText.get().trim()
+        } catch (e: Exception) {
+            "unknown"
+        }
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
     signingConfigs {

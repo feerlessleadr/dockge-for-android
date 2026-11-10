@@ -38,9 +38,10 @@ interface DockgeSocket {
     }
 }
 
-/** Every stack and container call is wrapped as emit("agent", endpoint, event, ...args). The endpoint "" is this instance. */
+/** Every stack and container call is wrapped as emit("agent", endpoint, event, ...args). The endpoint "" is this instance; any other value addresses a linked (federated) server through this instance. */
 suspend fun DockgeSocket.agentCall(
     event: String,
     args: List<JsonElement> = emptyList(),
     timeoutMs: Long = DockgeSocket.DEFAULT_TIMEOUT_MS,
-): JsonElement = call("agent", listOf(JsonPrimitive(""), JsonPrimitive(event)) + args, timeoutMs)
+    endpoint: String = "",
+): JsonElement = call("agent", listOf(JsonPrimitive(endpoint), JsonPrimitive(event)) + args, timeoutMs)

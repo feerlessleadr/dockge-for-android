@@ -46,12 +46,19 @@ import com.feerlessleadr.dockge.data.ConnectionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (String) -> Unit) {
+fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (String) -> Unit, onOpen: (String) -> Unit, onDiagnostics: (String) -> Unit) {
     val rows by vm.rows.collectAsState()
     var loginFor by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Instances") }) },
+        topBar = {
+            TopAppBar(title = {
+                Column {
+                    Text("Instances")
+                    Text("Build ${com.feerlessleadr.dockge.BuildConfig.GIT_SHA}", style = MaterialTheme.typography.labelSmall)
+                }
+            })
+        },
         floatingActionButton = { ExtendedFloatingActionButton(onClick = onAdd) { Text("Add instance") } },
     ) { padding ->
         if (rows.isEmpty()) {
@@ -70,11 +77,14 @@ fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (Strin
                         onClick = {
                             if (row.state is ConnectionState.NeedsLogin || row.state is ConnectionState.NeedsTwoFactor) {
                                 loginFor = row.instance.id
+                            } else if (row.state == ConnectionState.Connected) {
+                                onOpen(row.instance.id)
                             }
                         },
                         onEdit = { onEdit(row.instance.id) },
                         onRetry = { vm.reconnect(row.instance.id) },
                         onSignOut = { vm.signOut(row.instance.id) },
+                        onDiagnostics = { onDiagnostics(row.instance.id) },
                     )
                 }
             }
@@ -88,7 +98,7 @@ fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (Strin
 }
 
 @Composable
-private fun InstanceCard(row: InstanceRow, onClick: () -> Unit, onEdit: () -> Unit, onRetry: () -> Unit, onSignOut: () -> Unit) {
+private fun InstanceCard(row: InstanceRow, onClick: () -> Unit, onEdit: () -> Unit, onRetry: () -> Unit, onSignOut: () -> Unit, onDiagnostics: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -102,6 +112,10 @@ private fun InstanceCard(row: InstanceRow, onClick: () -> Unit, onEdit: () -> Un
                     style = MaterialTheme.typography.labelLarge,
                     color = statusColor(s),
                 )
+                if (s == ConnectionState.Connected && row.stackCount != null) {
+                    val servers = if (row.serverCount > 1) " on ${row.serverCount} servers" else ""
+                    Text("${row.stackCount} stacks$servers, ${row.runningCount} running", style = MaterialTheme.typography.bodySmall)
+                }
             }
             Box {
                 TextButton(onClick = { menu = true }) { Text("⋮") }
@@ -109,6 +123,9 @@ private fun InstanceCard(row: InstanceRow, onClick: () -> Unit, onEdit: () -> Un
                     DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; onEdit() })
                     DropdownMenuItem(text = { Text("Retry connection") }, onClick = { menu = false; onRetry() })
                     DropdownMenuItem(text = { Text("Sign out") }, onClick = { menu = false; onSignOut() })
+                    if (com.feerlessleadr.dockge.BuildConfig.DEBUG) {
+                        DropdownMenuItem(text = { Text("Diagnostics") }, onClick = { menu = false; onDiagnostics() })
+                    }
                 }
             }
         }

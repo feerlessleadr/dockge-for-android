@@ -43,7 +43,7 @@ class SocketIoDockgeSocket(baseUrl: BaseUrl) : DockgeSocket {
             forceNew = true
             reconnection = true
             reconnectionDelay = 1_000
-            reconnectionDelayMax = 30_000
+            reconnectionDelayMax = 10_000
             timeout = 15_000
         },
     )
