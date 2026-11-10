@@ -9,13 +9,23 @@ import com.feerlessleadr.dockge.api.StackDetail
 import com.feerlessleadr.dockge.api.StackStatus
 import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.data.ConnectionState
+import com.feerlessleadr.dockge.api.DockgeSocket
+import com.feerlessleadr.dockge.data.Action
+import com.feerlessleadr.dockge.data.ActionOutcome
+import com.feerlessleadr.dockge.data.ContainerAction
+import com.feerlessleadr.dockge.data.ActionState
+import com.feerlessleadr.dockge.data.StackAction
+import com.feerlessleadr.dockge.data.StackActionRunner
 import com.feerlessleadr.dockge.data.StackDetailLoader
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class InstanceRow(
     val instance: Instance,
@@ -25,6 +35,11 @@ data class InstanceRow(
     /** More than 1 when other Dockge servers are linked to this instance. */
     val serverCount: Int = 1,
 )
+
+data class ActionKey(val instanceId: String, val endpoint: String, val stackName: String)
+
+/** [target] is what the action works on (the stack's or the container's name). */
+data class ActionUi(val key: ActionKey, val action: Action, val target: String, val state: ActionState)
 
 class InstancesViewModel(app: Application) : AndroidViewModel(app) {
     private val container = (app as DockgeApp).container
@@ -75,6 +90,41 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The last pushed stack list of one instance, or null before the first push. */
     fun stacks(id: String): Flow<List<ServerStacks>?> = container.sessions.stackLists.map { it[id] }
+
+    private val _action = MutableStateFlow<ActionUi?>(null)
+
+    /** The write action that is running or just ended (one at a time, app wide). The detail screen of its stack shows it. */
+    val action: StateFlow<ActionUi?> = _action.asStateFlow()
+
+    /** Starts [action] on a stack. Ignored while another action is running. Lives in the ViewModel so leaving the screen or rotating does not lose the output. */
+    fun runAction(instanceId: String, endpoint: String, stackName: String, action: StackAction) =
+        launchAction(ActionKey(instanceId, endpoint, stackName), action, stackName) { socket ->
+            StackActionRunner.run(socket, stackName, endpoint, action)
+        }
+
+    /** Start, stop or restart one container of a stack. [target] is its name, for the titles. */
+    fun runContainerAction(instanceId: String, endpoint: String, stackName: String, containerId: String, target: String, action: ContainerAction) =
+        launchAction(ActionKey(instanceId, endpoint, stackName), action, target) { socket ->
+            StackActionRunner.runContainer(socket, stackName, containerId, endpoint, action)
+        }
+
+    private fun launchAction(key: ActionKey, action: Action, target: String, start: (DockgeSocket) -> Flow<ActionState>) {
+        if (_action.value?.state?.running == true) return
+        val socket = container.sessions.session(key.instanceId)?.socket
+        if (socket == null) {
+            _action.value = ActionUi(key, action, target, ActionState(outcome = ActionOutcome.Failed("This instance is not connected.")))
+            return
+        }
+        _action.value = ActionUi(key, action, target, ActionState())
+        viewModelScope.launch {
+            start(socket).collect { _action.value = ActionUi(key, action, target, it) }
+        }
+    }
+
+    /** Clears a finished action. A running one cannot be dismissed. */
+    fun dismissAction() {
+        if (_action.value?.state?.running == false) _action.value = null
+    }
 
     /** Read-only: service status and container list of one stack on one server ("" = the instance itself). */
     suspend fun loadDetail(instanceId: String, endpoint: String, stackName: String): Result<StackDetail> {
