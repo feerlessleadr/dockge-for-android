@@ -63,3 +63,10 @@
 - **Decision**: Keep `io.socket:socket.io-client` 2.1.2 (websocket transport only, `org.json` excluded because Android ships it). It connected, logged in with 2FA and received `stackList` on a real phone against dockge-enhanced 1.5.x.
 - **Rationale**: Works as designed; no need to hand-write the protocol.
 - **Impact**: Closes the "Socket.IO Java client against the fork's server version" open item in docs/build-plan.md. The emulator cannot reach the internal test host, so live checks use the real phone.
+
+### 2026-11-10, Federated lists keyed by endpoint; recovery on network return and foreground
+- **Context**: Owner tested M3 on a production instance with linked servers. Counts jumped between servers, and after the screen was off the app showed "websocket error" until restarted.
+- **Options considered**: Filter lists by `agentList` keys; show only the instance's own list; key lists by the `endpoint` stamped on each pushed `stackList` (what the fork's web UI does).
+- **Decision**: Keep one list per endpoint, grouped by server in the UI, never hidden by `agentList`. Rebuild a not-connected socket when the default network becomes available (2 s grace) and when the app returns to the foreground (10 s grace); retry token login with backoff; reconnect delay cap 10 s. Keep a debug-only in-memory diagnostics log (no bodies, tokens or passwords) and the build id in the UI.
+- **Rationale**: Owner's device log on build 0f3d863 showed distinct endpoints per push and recovery in about 1 s. The earlier symptoms came from builds missing these fixes.
+- **Impact**: StackData.kt, SessionManager.kt, DockgeApp.kt, MainActivity.kt, SocketIoDockgeSocket.kt, DiagnosticsScreen.kt. No cross-project impact.
