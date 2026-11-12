@@ -9,9 +9,18 @@ import com.feerlessleadr.dockge.core.PrefsInstanceStore
 import com.feerlessleadr.dockge.core.TokenVault
 import com.feerlessleadr.dockge.data.InstanceRepository
 import com.feerlessleadr.dockge.data.SessionManager
+import com.feerlessleadr.dockge.notify.AlertClassifier
+import com.feerlessleadr.dockge.notify.AlertNotifier
+import com.feerlessleadr.dockge.notify.AlertRouting
+import com.feerlessleadr.dockge.notify.AlertTarget
+import com.feerlessleadr.dockge.notify.NtfyClient
+import com.feerlessleadr.dockge.notify.NtfyController
+import com.feerlessleadr.dockge.notify.NtfyListener
+import com.feerlessleadr.dockge.notify.PrefsNtfyStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /** Plain constructor injection: the app is small, so there is no DI framework. */
@@ -20,6 +29,21 @@ class AppContainer(app: Application) {
     val instances = InstanceRepository(PrefsInstanceStore(app), vault, allowCleartext = BuildConfig.DEBUG)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val sessions = SessionManager(instances, vault, scope) { url -> SocketIoDockgeSocket(url) }
+
+    /** A tapped alert asks the UI to open this; the UI clears it once it has navigated. */
+    val pendingTarget = MutableStateFlow<AlertTarget?>(null)
+
+    val notifier = AlertNotifier(app)
+    private val ntfyStore = PrefsNtfyStore(app)
+    private val ntfyClient = NtfyClient()
+    private val ntfyListener = NtfyListener(ntfyStore, vault, ntfyClient, scope) { message ->
+        val kind = AlertClassifier.kind(message.title, message.message)
+        val target = AlertRouting.resolve(message, instances.instances.value) { id ->
+            sessions.stackLists.value[id].orEmpty().flatMap { server -> server.stacks.map { server.endpoint to it.name } }
+        }
+        notifier.post(message, kind, target)
+    }
+    val ntfy = NtfyController(app, ntfyStore, vault, ntfyListener, ntfyClient, allowCleartext = BuildConfig.DEBUG)
 
     init {
         // When a network (or the VPN tunnel) comes back, do not wait for the socket library's backoff: rebuild the
@@ -42,5 +66,7 @@ class DockgeApp : Application() {
         container = AppContainer(this)
         // Saved instances reconnect (with their saved tokens) as soon as the process starts.
         container.sessions.start()
+        // Alerts: while the process lives the ntfy stream runs; the foreground service keeps the process alive.
+        container.ntfy.listener.apply()
     }
 }
