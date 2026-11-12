@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,12 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
     val servers by vm.stacks(instanceId).collectAsState(initial = null)
     val connection by vm.connection(instanceId).collectAsState(initial = ConnectionState.Connecting)
     var query by remember { mutableStateOf("") }
+    val updates by vm.updates(instanceId).collectAsState(initial = null)
+    // Opening the list asks for the update status again (it does nothing until the stack list is known).
+    val listKnown = servers != null
+    LaunchedEffect(instanceId, listKnown, connection == ConnectionState.Connected) {
+        if (listKnown && connection == ConnectionState.Connected) vm.refreshUpdates(instanceId)
+    }
 
     Scaffold(
         topBar = {
@@ -77,6 +84,23 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.labelLarge,
             )
+            val withUpdates = updates?.values?.sumOf { it.availableCount } ?: 0
+            if (withUpdates > 0) {
+                Text(
+                    if (withUpdates == 1) "1 stack has an update" else "$withUpdates stacks have updates",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
+            val watcherOff = all.filter { updates?.get(it.endpoint)?.watcherEnabled == false }
+            if (watcherOff.isNotEmpty()) {
+                Text(
+                    "Update checks are off on ${watcherOff.joinToString { it.name }}. Turn on the image watcher in that Dockge's settings.",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, label = { Text("Search") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -88,7 +112,8 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
                     if (shown.isEmpty() && q.isNotEmpty()) continue
                     if (multi) {
                         val up = server.stacks.count { it.status == StackStatus.Running }
-                        add(ListItem.Header("h:${server.endpoint}", server.name, server.status == "offline", "${server.stacks.size} stacks, $up running"))
+                        val upd = updates?.get(server.endpoint)?.availableCount ?: 0
+                        add(ListItem.Header("h:${server.endpoint}", server.name, server.status == "offline", "${server.stacks.size} stacks, $up running" + if (upd > 0) ", $upd with updates" else ""))
                     }
                     shown.forEach { add(ListItem.Row("${server.endpoint}|${it.name}", it)) }
                 }
@@ -109,7 +134,10 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
                                     color = if (item.offline) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            is ListItem.Row -> StackCard(item.stack) { onOpen(item.stack.endpoint, item.stack.name) }
+                            is ListItem.Row -> StackCard(
+                                item.stack,
+                                hasUpdate = updates?.get(item.stack.endpoint)?.availableFor(item.stack.name)?.isNotEmpty() == true,
+                            ) { onOpen(item.stack.endpoint, item.stack.name) }
                         }
                     }
                 }
@@ -119,7 +147,7 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
 }
 
 @Composable
-private fun StackCard(stack: Stack, onClick: () -> Unit) {
+private fun StackCard(stack: Stack, hasUpdate: Boolean, onClick: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(enabled = stack.isManaged, onClick = onClick)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -130,6 +158,7 @@ private fun StackCard(stack: Stack, onClick: () -> Unit) {
                 } else if (stack.isExternal) {
                     Text("External stack", style = MaterialTheme.typography.bodySmall)
                 }
+                if (hasUpdate) Text("Update available", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
             }
             Text(stack.status.label(), color = stack.status.color(), style = MaterialTheme.typography.labelLarge)
         }

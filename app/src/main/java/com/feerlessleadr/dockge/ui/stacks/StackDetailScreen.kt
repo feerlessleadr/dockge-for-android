@@ -25,6 +25,10 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.platform.LocalUriHandler
+import com.feerlessleadr.dockge.api.ImageLinks
+import com.feerlessleadr.dockge.api.ImageUpdate
+import com.feerlessleadr.dockge.api.ServerUpdates
 import com.feerlessleadr.dockge.data.Action
 import com.feerlessleadr.dockge.data.ActionOutcome
 import com.feerlessleadr.dockge.data.ContainerAction
@@ -88,7 +92,22 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     }
 
     // When an action ends, reload the containers instead of waiting for the next 10 s refresh.
-    LaunchedEffect(mine?.state?.outcome) { if (mine?.state?.outcome != null) manualRefresh++ }
+    LaunchedEffect(mine?.state?.outcome) {
+        if (mine?.state?.outcome != null) {
+            manualRefresh++
+            // The server drops its update entries for a stack it just updated; ask again so the badge matches.
+            if (mine.action == StackAction.Update) vm.refreshUpdates(instanceId)
+        }
+    }
+
+    // Pull-to-refresh also asks for the update status again.
+    var updateRefresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(updateRefresh) { if (updateRefresh > 0) vm.refreshUpdates(instanceId) }
+
+    val allUpdates by vm.updates(instanceId).collectAsState(initial = null)
+    val serverUpdates = allUpdates?.get(endpoint)
+    val available = serverUpdates?.availableFor(stackName).orEmpty()
+    val uriHandler = LocalUriHandler.current
 
     // Keyed on the connection too: when the instance reconnects (for example after the phone slept) the loop starts
     // again at once instead of showing the old "Not connected" error until the next tick.
@@ -113,7 +132,7 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = refreshing,
-            onRefresh = { refreshing = true; manualRefresh++ },
+            onRefresh = { refreshing = true; manualRefresh++; updateRefresh++ },
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             val data = loaded
@@ -131,7 +150,7 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            StackAction.entries.forEach { a ->
+                            StackAction.entries.filter { it != StackAction.Update }.forEach { a ->
                                 FilledTonalButton(
                                     enabled = canAct,
                                     onClick = { request(a, stack?.title ?: stackName) { vm.runAction(instanceId, endpoint, stackName, a) } },
@@ -150,6 +169,16 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                             TextButton(onClick = { showSheet = true }) { Text(actionTitle(mine)) }
                         }
                     }
+                }
+                item {
+                    UpdateSection(
+                        updates = serverUpdates,
+                        stackName = stackName,
+                        available = available,
+                        canAct = canAct,
+                        openLink = { url -> runCatching { uriHandler.openUri(url) } },
+                        onUpdate = { request(StackAction.Update, stack?.title ?: stackName) { vm.updateStack(instanceId, endpoint, stackName) } },
+                    )
                 }
                 if (data == null) {
                     item {
@@ -233,10 +262,53 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     }
 }
 
+/** What the server's image watcher knows about this stack's images, and the one-tap update (confirmed by the caller). */
+@Composable
+private fun UpdateSection(
+    updates: ServerUpdates?,
+    stackName: String,
+    available: List<ImageUpdate>,
+    canAct: Boolean,
+    openLink: (String) -> Unit,
+    onUpdate: () -> Unit,
+) {
+    when {
+        updates == null -> Unit
+        !updates.watcherEnabled ->
+            Text("Update checks are off on this server. Turn on the image watcher in its Dockge settings.", style = MaterialTheme.typography.bodySmall)
+        available.isEmpty() -> {
+            val checked = updates.forStack(stackName).mapNotNull { it.lastChecked }.maxOrNull()
+            Text(
+                if (checked == null) "No update information for this stack yet." else "Images are up to date (checked ${Uptime.format(checked, Instant.now())} ago).",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        else -> Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(if (available.size == 1) "Update available" else "${available.size} updates available", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
+                available.forEach { u ->
+                    Column {
+                        Text(u.image, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "${ImageLinks.shortDigest(u.localDigest)} -> ${ImageLinks.shortDigest(u.remoteDigest)}",
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        ImageLinks.registryUrl(u.image)?.let { url -> TextButton(onClick = { openLink(url) }) { Text("Image page") } }
+                    }
+                }
+                Text("The server has no changelog. The image page is the best place to read what changed.", style = MaterialTheme.typography.bodySmall)
+                FilledTonalButton(enabled = canAct, onClick = onUpdate) { Text("Update stack") }
+            }
+        }
+    }
+}
+
 private class Pending(val action: Action, val target: String, val run: () -> Unit)
 
 private fun actionTitle(ui: ActionUi): String = when (ui.state.outcome) {
     null -> "${ui.action.doing} ${ui.target}..."
     ActionOutcome.Done -> "${ui.action.label} finished: ${ui.target}"
+    ActionOutcome.RolloutPending -> "Rolling update started: ${ui.target}. It continues on the server."
     is ActionOutcome.Failed -> "${ui.action.label} failed: ${ui.target}"
 }

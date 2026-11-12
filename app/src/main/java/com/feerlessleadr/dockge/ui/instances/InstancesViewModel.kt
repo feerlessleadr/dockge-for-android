@@ -10,6 +10,7 @@ import com.feerlessleadr.dockge.api.StackStatus
 import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.data.ConnectionState
 import com.feerlessleadr.dockge.api.DockgeSocket
+import com.feerlessleadr.dockge.api.ServerUpdates
 import com.feerlessleadr.dockge.data.Action
 import com.feerlessleadr.dockge.data.ActionOutcome
 import com.feerlessleadr.dockge.data.ContainerAction
@@ -34,6 +35,8 @@ data class InstanceRow(
     val runningCount: Int?,
     /** More than 1 when other Dockge servers are linked to this instance. */
     val serverCount: Int = 1,
+    /** Stacks with an image update on all servers, or null until the server was asked. */
+    val updateCount: Int? = null,
 )
 
 data class ActionKey(val instanceId: String, val endpoint: String, val stackName: String)
@@ -45,8 +48,8 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
     private val container = (app as DockgeApp).container
 
     val rows: StateFlow<List<InstanceRow>> = combine(
-        container.instances.instances, container.sessions.states, container.sessions.stackLists,
-    ) { list, states, stacks ->
+        container.instances.instances, container.sessions.states, container.sessions.stackLists, container.sessions.updates,
+    ) { list, states, stacks, updates ->
         list.map {
             val servers = stacks[it.id]
             val all = servers?.flatMap { sv -> sv.stacks }
@@ -56,6 +59,7 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
                 stackCount = all?.size,
                 runningCount = all?.count { st -> st.status == StackStatus.Running },
                 serverCount = servers?.size ?: 1,
+                updateCount = updates[it.id]?.values?.sumOf { u -> u.availableCount },
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -90,6 +94,15 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The last pushed stack list of one instance, or null before the first push. */
     fun stacks(id: String): Flow<List<ServerStacks>?> = container.sessions.stackLists.map { it[id] }
+
+    /** The image watcher's result per server endpoint of one instance, or null before the first answer. */
+    fun updates(id: String): Flow<Map<String, ServerUpdates>?> = container.sessions.updates.map { it[id] }
+
+    /** Asks the instance's servers for their update status now (read only). */
+    suspend fun refreshUpdates(id: String) = container.sessions.refreshUpdates(id)
+
+    /** Starts an update of the whole stack: pull, then recreate. The caller shows the confirm dialog first. */
+    fun updateStack(instanceId: String, endpoint: String, stackName: String) = runAction(instanceId, endpoint, stackName, StackAction.Update)
 
     private val _action = MutableStateFlow<ActionUi?>(null)
 

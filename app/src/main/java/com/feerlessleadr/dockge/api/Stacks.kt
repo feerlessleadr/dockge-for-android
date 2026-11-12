@@ -147,6 +147,32 @@ object StackParser {
         }.sortedWith(compareBy({ it.service.lowercase() }, { it.name.lowercase() }))
     }
 
+    /** Parses the acknowledgement of `watcherImageStatusGet`: one entry per image of every stack of that server. */
+    fun parseImageStatus(reply: JsonElement): List<ImageUpdate> {
+        val obj = okOrThrow(reply)
+        return (obj["data"] as? JsonArray).orEmpty().mapNotNull { value ->
+            val s = value as? JsonObject ?: return@mapNotNull null
+            val stack = s.string("stack") ?: return@mapNotNull null
+            val image = s.string("image") ?: return@mapNotNull null
+            ImageUpdate(
+                stack = stack,
+                image = image,
+                localDigest = s.string("localDigest") ?: "",
+                remoteDigest = s.string("remoteDigest") ?: "",
+                hasUpdate = s.bool("hasUpdate") ?: false,
+                lastChecked = s.instant("lastChecked"),
+                ignored = s.bool("ignored") ?: false,
+                error = s.string("error")?.ifBlank { null },
+            )
+        }
+    }
+
+    /** From the acknowledgement of `watcherImageAutoUpdateGet`: whether the image watcher is switched on at all. */
+    fun parseWatcherEnabled(reply: JsonElement): Boolean {
+        val obj = okOrThrow(reply)
+        return ((obj["data"] as? JsonObject)?.bool("enabled")) ?: false
+    }
+
     private fun okOrThrow(reply: JsonElement): JsonObject {
         val obj = reply as? JsonObject ?: throw ApiException("Unexpected reply from the server.")
         if (obj.bool("ok") != true) throw ApiException(obj.string("msg") ?: "The server reported an error.")

@@ -28,6 +28,9 @@ enum class StackAction(val event: String, override val label: String, override v
     Restart("restartStack", "Restart", "Restarting", "All containers of this stack are restarted."),
     Stop("stopStack", "Stop", "Stopping", "The containers are stopped. Their data is kept."),
     Down("downStack", "Down", "Taking down", "The containers and the network of this stack are removed. Volumes and the compose files are kept."),
+
+    /** `docker compose pull`, then recreate every service. Offered from the update section, not the plain button row. */
+    Update("updateStack", "Update", "Updating", "New images are pulled and every container of this stack is recreated. The stack is briefly down."),
 }
 
 /** One container (`containerInstanceAction`: plain `docker start|stop|restart`, no terminal output). */
@@ -46,6 +49,9 @@ interface Action {
 
 sealed interface ActionOutcome {
     data object Done : ActionOutcome
+
+    /** The server answered "serviceRollout.pending": a rolling update was started and finishes on the server, not before this ack. */
+    data object RolloutPending : ActionOutcome
     data class Failed(val message: String) : ActionOutcome
 }
 
@@ -146,7 +152,9 @@ object StackActionRunner {
 
     internal fun parseAck(reply: kotlinx.serialization.json.JsonElement): ActionOutcome {
         val obj = reply as? JsonObject ?: return ActionOutcome.Failed("Unexpected reply from the server.")
-        if ((obj["ok"] as? JsonPrimitive)?.booleanOrNull == true) return ActionOutcome.Done
+        if ((obj["ok"] as? JsonPrimitive)?.booleanOrNull == true) {
+            return if ((obj["msg"] as? JsonPrimitive)?.contentOrNull == "serviceRollout.pending") ActionOutcome.RolloutPending else ActionOutcome.Done
+        }
         return ActionOutcome.Failed((obj["msg"] as? JsonPrimitive)?.contentOrNull ?: "The server reported an error.")
     }
 }

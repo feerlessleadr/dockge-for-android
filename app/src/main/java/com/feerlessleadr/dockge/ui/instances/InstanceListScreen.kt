@@ -115,6 +115,13 @@ private fun InstanceCard(row: InstanceRow, onClick: () -> Unit, onEdit: () -> Un
                 if (s == ConnectionState.Connected && row.stackCount != null) {
                     val servers = if (row.serverCount > 1) " on ${row.serverCount} servers" else ""
                     Text("${row.stackCount} stacks$servers, ${row.runningCount} running", style = MaterialTheme.typography.bodySmall)
+                    row.updateCount?.takeIf { it > 0 }?.let {
+                        Text(
+                            if (it == 1) "1 stack has an update" else "$it stacks have updates",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
             }
             Box {
