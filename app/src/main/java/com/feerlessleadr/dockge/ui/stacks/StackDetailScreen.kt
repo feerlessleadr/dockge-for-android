@@ -100,6 +100,10 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
         }
     }
 
+    // Pull-to-refresh also asks for the update status again.
+    var updateRefresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(updateRefresh) { if (updateRefresh > 0) vm.refreshUpdates(instanceId) }
+
     val allUpdates by vm.updates(instanceId).collectAsState(initial = null)
     val serverUpdates = allUpdates?.get(endpoint)
     val available = serverUpdates?.availableFor(stackName).orEmpty()
@@ -128,7 +132,7 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = refreshing,
-            onRefresh = { refreshing = true; manualRefresh++ },
+            onRefresh = { refreshing = true; manualRefresh++; updateRefresh++ },
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             val data = loaded

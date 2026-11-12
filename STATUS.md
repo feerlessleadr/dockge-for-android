@@ -1,6 +1,6 @@
-# STATUS (2026-11-10)
+# STATUS (2026-11-12)
 
-**Phase:** M5 (updates) is built on branch m5-updates and waiting for the owner's device test. M0 to M4 are merged (M4 as PR 8, after the owner's test of every action on `whoami`). 110 unit tests pass. Nothing in M5 has been run against a real server yet.
+**Phase:** M5 (updates) is built on branch m5-updates and owner-verified on the test instance (2026-11-12); PR 9 awaits the merge go-ahead. M0 to M4 are merged (M4 as PR 8, after the owner's test of every action on `whoami`). 110 unit tests pass. Found in the test: update status was not refreshed on resume or pull-to-refresh; fixed (not re-verified on a device).
 
 ## Done
 - Project registered in WORKSPACE.md; repo, branch protection (PR + `build-and-test`, admins enforced), release keystore and 4 repo secrets in place.
@@ -13,9 +13,9 @@
   - There is no changelog on the server; the image page and digests are what we show.
 
 ## Next action
-- Owner installs the M5 debug build and tests on the isolated test instance (below). Then merge the PR (owner go-ahead) and start M6 (ntfy notifications).
+- Merge PR 9, then M6 (ntfy notifications).
 
-## Owner test (M5), test instance only
+## Owner test (M5), test instance only (done 2026-11-12, passed)
 1. In the test Dockge enable the image watcher (Settings > Image updates or similar) and run a check. Without it the app shows "Update checks are off".
 2. To get a real update on `whoami`: pin it to an older tag of a small public image (for example an older `traefik/whoami` version) and Start it, then change the tag in the compose file to `latest` WITHOUT pulling, or use a tag the watcher reports as outdated. Tell me if you want help picking a safe setup.
 3. Open the instance: card shows "1 stack has an update"; open the stack: update section with digests and "Image page" (opens the browser).

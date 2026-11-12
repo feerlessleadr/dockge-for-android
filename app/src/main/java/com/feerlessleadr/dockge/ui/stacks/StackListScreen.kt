@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,11 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
     val connection by vm.connection(instanceId).collectAsState(initial = ConnectionState.Connecting)
     var query by remember { mutableStateOf("") }
     val updates by vm.updates(instanceId).collectAsState(initial = null)
+    // Opening the list asks for the update status again (it does nothing until the stack list is known).
+    val listKnown = servers != null
+    LaunchedEffect(instanceId, listKnown, connection == ConnectionState.Connected) {
+        if (listKnown && connection == ConnectionState.Connected) vm.refreshUpdates(instanceId)
+    }
 
     Scaffold(
         topBar = {

@@ -89,6 +89,9 @@ class SessionManager(
                     if (!session.verify()) {
                         logs[id]?.add("recover: connection did not answer, rebuilding")
                         reconnect(id)
+                    } else {
+                        // Back in the app: the watcher may have found something since the last 5 minute round.
+                        refreshUpdates(id)
                     }
                 }
                 is ConnectionState.NeedsLogin, is ConnectionState.NeedsTwoFactor, ConnectionState.LoggingIn -> Unit

@@ -147,6 +147,9 @@ class UpdateTest {
         assertEquals(1, firstRound)
         advanceTimeBy(5 * 60_000L + 1); runCurrent()
         assertEquals(firstRound + 1, statusCalls())
+        // Coming back to the app asks again at once, not only after the next 5 minute round.
+        manager.recover(); runCurrent()
+        assertEquals(firstRound + 2, statusCalls())
         repo.delete(a.id); runCurrent()
         assertNull(manager.updates.value[a.id])
     }

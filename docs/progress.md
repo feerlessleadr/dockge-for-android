@@ -72,3 +72,9 @@
 - Only trustworthy updates are counted: `hasUpdate && no error && not ignored`. If the watcher is off on a server, the app says so instead of "up to date".
 - Not built (kept small): per-service update (`serviceAction update`), "update all", auto-update settings, skip-this-release, rollback. All exist on the server (see docs/dockge-api.md part 4) and can follow.
 - Verified: 110 unit tests (parsers, link rules, store with failures, 5-minute refresh, rollout-pending ack, busy refusal); debug build. NOT verified: anything against a real server (see STATUS.md).
+
+### 2026-11-12, owner device test of M5 (test instance, stack `whoami`)
+- Setup: watcher on in the test Dockge; old tag `v1.11` retagged as `latest`; stack Down then Start; image check run in the Dockge UI.
+- Result: the update showed in the app (badge, digests, Image page), Update stack ran from the app, finished "Done", badge went away. Afterwards `latest` and the container are the new image (container recreated at the time of the update). The owner's noted "before" ID was read after the update, so the first comparison looked like "no change"; the image list confirmed the update.
+- Watcher calls on the test instance are verified. Still unverified: linked (federated) servers through the production instance, rollout-pending ack, connection loss during Update.
+- Owner finding: the update only appeared after force-closing and reopening the app. Known gap: update status is asked at connect and every 5 min, and neither pull-to-refresh nor returning to the app asks again. Fixed in the same PR: update status is asked again when the app comes back to the foreground (`recover()`), when the stack list opens, and on pull-to-refresh in the stack detail. Unit test: recover triggers a status call. NOT re-verified on a device.
