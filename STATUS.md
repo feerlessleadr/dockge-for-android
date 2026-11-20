@@ -29,4 +29,4 @@
 - The progress parser against real compose output of other compose versions.
 
 ## Owner manual steps
-- The two above. Release tags only on "publish it".
+- Uninstall the `.rtest` test app. Release tags only on "publish it".
