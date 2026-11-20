@@ -11,7 +11,7 @@ env:
   # SHA-256 of the release signing certificate, lower case hex without colons. Public information. The build fails
   # when the APK is signed with anything else, so a wrong key can never be published. Pinned by the owner (see
   # docs/progress.md, M7).
-  EXPECTED_CERT_SHA256: ""
+  EXPECTED_CERT_SHA256: "e412acf41461eed0b8980319980ffce60bf6b41b5a973d7b3c7e595a0da1a0f3"
 
 jobs:
   release:

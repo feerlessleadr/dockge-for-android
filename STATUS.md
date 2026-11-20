@@ -1,6 +1,6 @@
 # STATUS (2026-11-20)
 
-**Phase:** M7 (release 0.1.0) is prepared on branch m7-release. M0 to M6 are merged and owner-verified on a device (M6 as PR 10). The first release has not been published: it needs the pinned signing certificate, an R8 runtime test, and the owner's "publish it". 149 unit tests pass.
+**Phase:** M7 (release 0.1.0) is prepared on branch m7-release (PR 11). M0 to M6 are merged and owner-verified on a device (M6 as PR 10). The signing certificate is pinned and the owner tested the minified (R8) build on a phone. The first release has not been published: it needs the PR 11 merge go-ahead and the owner's "publish it". 149 unit tests pass.
 
 ## Done
 - Project registered in WORKSPACE.md; repo, branch protection (PR + `build-and-test`, admins enforced), release keystore and 4 repo secrets in place.
@@ -12,20 +12,18 @@
   - `docs/releases/v0.1.0.md`, README install (Obtainium, by hand, first start).
 
 ## Next action
-- Owner: (1) read the signing certificate SHA-256 from the keystore and give it to me (public value, steps below), (2) test the `.rtest` build (R8) on the phone, (3) say "publish it" when ready.
-- Then: I pin the fingerprint, merge the M7 PR (owner go-ahead), wait for CI, then tag `v0.1.0` only on "publish it". After the release: install through Obtainium, then a second tag (0.1.1) to prove the update path.
+- Owner: go-ahead to merge PR 11 (after CI), then "publish it" for the tag `v0.1.0`. I tag only on "publish it".
+- After the release: install through Obtainium, then a second tag (0.1.1) to prove the update path.
 
-## Owner steps
-1. Fingerprint (the password stays with you, never send it): in PowerShell run
-   `& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -list -keystore C:\keystore\dockge-for-android.jks`
-   and send me the line "Certificate fingerprint (SHA-256): ..." (the alias line can stay out).
-2. R8 test: install the `.rtest` APK (separate app "Dockge" next to the debug one). Try: add an instance and sign in (with and without 2FA if you can), open stacks and a detail screen, run a Restart on `whoami`, the update flow, Alerts on and a test alert (the whoami retag trick), force-close and reopen. Anything that crashes or behaves differently from the debug build is an R8 problem: send the screenshot or what you did. Uninstall the `.rtest` app afterwards.
+## Done by the owner (2026-11-20)
+- Signing certificate SHA-256 read from the keystore and pinned in `release.yml` (the first tag run also proves the repo secret holds the same keystore: if not, the workflow fails before publishing).
+- R8 (`.rtest`) build on the phone: sign in, Restart, update, alerts and force-close and reopen all work. The owner should uninstall the `.rtest` app.
 
 ## Open questions
 - TOTP seed storage: not implemented; ask before ever doing it.
 
 ## Not yet verified
-- The release workflow itself (first real run is the tag), the minified (R8) build at runtime on a phone, the Obtainium install and an Obtainium update over a second tag.
+- The release workflow itself (first real run is the tag), the Obtainium install and an Obtainium update over a second tag.
 - Token re-login after a server restart, a revoked token, login rate limit (live).
 - Linked (federated) servers: update status through the production instance, and whether their crash and health events can be read; rollout-pending ack and connection loss during Update.
 - The progress parser against real compose output of other compose versions.

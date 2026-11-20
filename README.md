@@ -21,7 +21,7 @@ Requirements: Android 8.0 or newer, an https address for each instance (a revers
 
 Installing by hand also works: download `dockge-for-android-vX.Y.Z.apk` from the release, and compare its SHA-256 with the value in the release notes (`sha256sum` on Linux and macOS, `Get-FileHash` in PowerShell).
 
-Every release is signed with the same key, and Android only installs an update that matches the signature of the installed app. The release notes list the certificate fingerprint. If you ever see an install fail with a signature error, do not uninstall and reinstall to "fix" it; check that the download came from this repository's releases.
+Every release is signed with the same key, and Android only installs an update that matches the signature of the installed app. The signing certificate's SHA-256 fingerprint is `E4:12:AC:F4:14:61:EE:D0:B8:98:03:19:98:0F:FC:E6:0B:F6:B4:1B:5A:97:3D:7B:3C:7E:59:5A:0D:A1:A0:F3` (also in each release's notes; check it with `apksigner verify --print-certs`). If you ever see an install fail with a signature error, do not uninstall and reinstall to "fix" it; check that the download came from this repository's releases.
 
 ## First start
 1. Add an instance (name, https address). Sign in with your Dockge user (and the two-factor code if you use one).
