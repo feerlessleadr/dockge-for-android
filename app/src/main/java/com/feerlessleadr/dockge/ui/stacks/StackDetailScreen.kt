@@ -238,26 +238,19 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     }
 
     if (mine != null && showSheet) {
-        val scroll = rememberScrollState()
-        LaunchedEffect(mine.state.output) { scroll.animateScrollTo(scroll.maxValue) }
+        // What a finished run would list: an update shows every service twice (pull, then recreate), others the containers.
+        val detail = loaded?.detail
+        val expected = detail?.let { if (mine.action == StackAction.Update) it.services.size + it.containers.size else it.containers.size }
         ModalBottomSheet(
             onDismissRequest = { showSheet = false; vm.dismissAction() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
-            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(actionTitle(mine), style = MaterialTheme.typography.titleMedium)
-                (mine.state.outcome as? ActionOutcome.Failed)?.let { Text(it.message, color = MaterialTheme.colorScheme.error) }
-                if (mine.state.running) LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text(
-                    mine.state.output.ifBlank { if (mine.state.running) "Waiting for output..." else "No output." },
-                    fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(scroll),
-                )
-                TextButton(onClick = { showSheet = false; vm.dismissAction() }, modifier = Modifier.align(Alignment.End)) {
-                    Text(if (mine.state.running) "Hide" else "Close")
-                }
-            }
+            ActionProgressContent(
+                ui = mine,
+                title = actionTitle(mine),
+                expected = expected,
+                onClose = { showSheet = false; vm.dismissAction() },
+            )
         }
     }
 }

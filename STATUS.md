@@ -1,6 +1,6 @@
 # STATUS (2026-11-20)
 
-**Phase:** M6 (alerts) is built on branch m6-notifications (PR 10) and waiting for the owner's device test. M6 was redesigned on 2026-11-20: the app now watches the Dockge instances directly, with no ntfy, Gotify or Apprise in the app (decision in DECISIONS.md). M0 to M5 are merged and owner-verified. 137 unit tests pass; debug and release (R8) builds succeed. Nothing in M6 has run on a device yet.
+**Phase:** M6 (alerts) is built on branch m6-notifications (PR 10) and passed the owner's device test on 2026-11-20; PR 10 awaits the merge go-ahead. A follow-up on the same branch replaced the scrolling action log with a static progress screen (owner request), not yet tested on a device. M6 was redesigned on 2026-11-20: the app now watches the Dockge instances directly, with no ntfy, Gotify or Apprise in the app (decision in DECISIONS.md). M0 to M5 are merged and owner-verified. 149 unit tests pass; debug and release (R8) builds succeed.
 
 ## Done
 - Project registered in WORKSPACE.md; repo, branch protection (PR + `build-and-test`, admins enforced), release keystore and 4 repo secrets in place.
@@ -12,7 +12,10 @@
   - Not watchable: cleanup, federation and Dockge self-update reports (Apprise or Discord only); crash and health events of servers linked to an instance (unverified).
 
 ## Next action
-- Owner device test of M6 (below). Then merge PR 10 (owner go-ahead) and start M7 (release 0.1.0).
+- Owner checks the new progress screen (below). Then merge PR 10 (owner go-ahead) and start M7 (release 0.1.0).
+
+## Owner test (progress screen), test instance only
+Run Update stack (retag trick), a Restart and a Down on `whoami`. The sheet should stay the same size with a bar, a percentage, a phase line and up to 8 rows, nothing scrolling. "Show full output" shows the raw text. If the bar stays indeterminate or the rows look odd, send a screenshot of the full output so the parser can be tuned to your compose version.
 
 ## Owner test (M6), on the isolated test instance first
 1. Install the new APK. Open Alerts, switch Alerts on, allow notifications. The instance should say "Monitoring feed read <time>". If it says "refused the saved login" or "no monitoring feed", send me that line (the feed or your user may not be allowed; that is what this test verifies).
