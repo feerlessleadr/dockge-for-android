@@ -46,18 +46,28 @@ import com.feerlessleadr.dockge.data.ConnectionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InstanceListScreen(vm: InstancesViewModel, onAdd: () -> Unit, onEdit: (String) -> Unit, onOpen: (String) -> Unit, onDiagnostics: (String) -> Unit) {
+fun InstanceListScreen(
+    vm: InstancesViewModel,
+    onAdd: () -> Unit,
+    onEdit: (String) -> Unit,
+    onOpen: (String) -> Unit,
+    onDiagnostics: (String) -> Unit,
+    onNotifications: () -> Unit,
+) {
     val rows by vm.rows.collectAsState()
     var loginFor by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = {
-                Column {
-                    Text("Instances")
-                    Text("Build ${com.feerlessleadr.dockge.BuildConfig.GIT_SHA}", style = MaterialTheme.typography.labelSmall)
-                }
-            })
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("Instances")
+                        Text("Build ${com.feerlessleadr.dockge.BuildConfig.GIT_SHA}", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
+                actions = { TextButton(onClick = onNotifications) { Text("Alerts") } },
+            )
         },
         floatingActionButton = { ExtendedFloatingActionButton(onClick = onAdd) { Text("Add instance") } },
     ) { padding ->
