@@ -131,3 +131,8 @@
 ### 2026-11-20, 0.1.1: Material 3 redesign and selectable icons (branch m8-design)
 - PR 13 merged (docs for 0.1.0). Mockups approved by the owner; spec written in `docs/design.md`.
 - Implemented: theme with status colors, shared components (tile, chip, list card, section header), bottom navigation (Instances, Settings; Alerts under Settings), restyled instance list, stack list (search, filter segments), stack detail (filled Update, update card, container cards), progress sheet as a checklist, Settings tab with the icon chooser, two adaptive launcher icons (with monochrome layer) switched through activity aliases. 149 unit tests pass and the debug build succeeds. Not yet looked at on a device: layout, dark mode, the icon switch.
+
+### 2026-11-20, 0.1.1 published
+- PR 14 merged (92b9970), then tag v0.1.1 pushed on it. The Release workflow succeeded in every step. https://github.com/feerlessleadr/dockge-for-android/releases/tag/v0.1.1
+- Assets: dockge-for-android-v0.1.1.apk (1860242 bytes, SHA-256 2c597142fd6aded74f0d8012a54ca6ae2056c17c18c0a3053827890a8801568c, equal to GitHub's digest) and its .sha256. The assistant did not download or install the APK.
+- NOT verified yet: Obtainium update from 0.1.0 to 0.1.1, the icon switch on the owner's launcher.
