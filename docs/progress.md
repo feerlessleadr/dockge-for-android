@@ -105,3 +105,13 @@
 - Verified: 149 unit tests (12 new, with sample compose output I wrote from compose's known format, not captured from a real run); debug and release (R8) builds. NOT verified: the real compose output on the owner's servers. If the bar or items look wrong, send a screenshot of "Show full output" and the parser gets tuned.
 
 - Owner device check of the progress screen (2026-11-20): "everything looks good". Real compose output was not captured, so the parser stays untested against other compose versions.
+
+## 2026-11-20, M6 merged, M7 (branch m7-release)
+- M6 (PR 10) merged after the owner's device tests of the alerts and the progress screen.
+- Prepared for 0.1.0: release workflow hardened (tag must be on main, release notes file must exist, signer certificate pinned and checked with apksigner, package and version checked with aapt2, keystore deleted after the build, notes plus checksums published); the PR workflow now also builds the R8 release; release builds signed with the debug key install as `com.feerlessleadr.dockge.rtest` (so the owner can test the minified build next to the debug one); `docs/releases/v0.1.0.md`; README install and first-start sections.
+- Verified locally: unit tests, R8 release build with the debug key (no R8 missing-rule warnings), apksigner output format matches the workflow's parsing (v2 scheme line, signer digest line), aapt2 shows the `.rtest` package. NOT verified: the release workflow itself (first run is the real tag), the R8 build at runtime on a phone, the Obtainium install, an Obtainium update over a second tag.
+- Needs the owner: the signing certificate SHA-256 (public; read from the keystore locally) to pin in `release.yml`, an R8 runtime test of the `.rtest` build, and "publish it" for the tag.
+
+### 2026-11-20, M7: certificate pinned, R8 build tested on a phone
+- The owner read the release certificate SHA-256 from the keystore and it is pinned in `release.yml` (README and release notes show it). Whether the repo secret holds that same keystore is proven by the first tag run, which fails before publishing if it does not.
+- Owner tested the minified `.rtest` build on a phone: sign in, Restart, update, alerts and force-close and reopen all work, so no R8 runtime problem showed up in those flows. Not covered: 2FA login, token re-login after a server restart, and flows not tried.

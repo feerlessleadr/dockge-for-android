@@ -51,6 +51,12 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // A release build signed with the debug key (local R8 test only) installs as its own app, so it can be
+            // tried on a phone next to the debug build and never blocks installing the real, properly signed release.
+            if (System.getenv("SIGNING_KEYSTORE_PATH") == null) {
+                applicationIdSuffix = ".rtest"
+                versionNameSuffix = "-rtest"
+            }
         }
         debug {
             applicationIdSuffix = ".debug"
