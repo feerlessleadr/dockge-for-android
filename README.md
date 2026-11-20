@@ -2,7 +2,7 @@
 
 A standalone Android app to manage one or more [dockge-enhanced](https://github.com/Aerya/dockge-enhanced) instances from a phone. Personal project, sideloaded (not on the Play Store, no Google push).
 
-**Status:** feature complete for 0.1.0 (instances, stacks and containers, actions, updates, alerts). The first release has not been published yet.
+**Status:** 0.1.0 is published (instances, stacks and containers, actions, updates, alerts). See the Releases page.
 
 ## What it does
 - Several instances (and the servers linked to them), live status, stacks and containers with state, health, image and uptime.

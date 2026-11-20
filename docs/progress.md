@@ -122,3 +122,8 @@
 - Lesson: the local apksigner (build-tools 36.0.0) and the runner's differ; I had tested the parsing only against the local format. The step now accepts both formats and fails with a clear message when it finds no digest. Tested against samples of both formats.
 - Still unexercised on the runner: the aapt2 package and version check, the rename and checksum step, and the release creation. A second failure there is possible; each step is safe (nothing is public until the last one).
 - The tag `v0.1.0` points at the commit with the old parser and has no release. It has to be recreated on the fixed commit (owner go-ahead needed) before the workflow can be run again.
+
+### 2026-11-20, M7: v0.1.0 published
+- Second run of the Release workflow (tag v0.1.0 on 07d2a72) succeeded in every step: tag on main, notes present, signed R8 build, certificate and package and version checks, rename and checksum, release creation. https://github.com/feerlessleadr/dockge-for-android/releases/tag/v0.1.0
+- Published assets: dockge-for-android-v0.1.0.apk (1789038 bytes, SHA-256 0add28609737b1b74a190d0379fafd003576ad33a6cf7b0ee95eff2a44d5b302, equal to the value in the release notes and to the digest GitHub reports) and its .sha256 file. Signer certificate SHA-256 e412acf41461eed0b8980319980ffce60bf6b41b5a973d7b3c7e595a0da1a0f3, equal to the pin. The APK itself was not downloaded or installed by the assistant.
+- NOT verified yet: install through Obtainium on the phone, the signed (not debug-signed) build at runtime, and an Obtainium update over a second tag.
