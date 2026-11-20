@@ -18,7 +18,7 @@ class AlertNotifier(private val context: Context) {
     init {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS, "Dockge alerts", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Crash loops, unhealthy containers and image updates sent through your ntfy server."
+                description = "Image updates, crash loops, unhealthy containers, failed backups and security findings from your Dockge servers."
             },
         )
         manager.createNotificationChannel(
@@ -33,7 +33,7 @@ class AlertNotifier(private val context: Context) {
     fun serviceNotification(): Notification =
         NotificationCompat.Builder(context, CHANNEL_SERVICE)
             .setSmallIcon(R.drawable.ic_stat_dockge)
-            .setContentTitle("Dockge is listening for alerts")
+            .setContentTitle("Dockge is watching your servers")
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .setShowWhen(false)
@@ -43,27 +43,26 @@ class AlertNotifier(private val context: Context) {
 
     /**
      * Shows one alert. The lock screen shows only the generic [AlertKind.publicTitle]; title and text appear after
-     * unlocking. [target] decides where a tap goes: a stack, an instance, or just the app.
+     * unlocking. The alert's target decides where a tap goes: a stack, an instance, or just the app.
      */
-    fun post(message: AlertMessage, kind: AlertKind, target: AlertTarget?) {
-        val id = message.id.hashCode()
+    fun post(alert: Alert) {
+        val id = alert.key.hashCode()
         val public = NotificationCompat.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_dockge)
-            .setContentTitle(kind.publicTitle)
+            .setContentTitle(alert.kind.publicTitle)
             .build()
-        val title = message.title.ifBlank { kind.publicTitle }
         val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_dockge)
-            .setContentTitle(title)
-            .setContentText(message.message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message.message))
+            .setContentTitle(alert.title)
+            .setContentText(alert.text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(alert.text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(public)
-            .setWhen(if (message.time > 0) message.time * 1000 else System.currentTimeMillis())
+            .setWhen(alert.time)
             .setAutoCancel(true)
-            .setContentIntent(open(target, id))
+            .setContentIntent(open(alert.target, id))
             .build()
         manager.notify(id, notification)
     }

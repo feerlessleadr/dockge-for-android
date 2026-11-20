@@ -65,15 +65,15 @@ The vault key is a non-exportable Keystore AES-GCM key. Deleting an instance or 
 - One tap on Update, then a confirm dialog that names the stack or container and says it will pull and recreate. Only then emit the call. Down, stop and restart also confirm; start does not.
 - Result handling: on ack show success or the message; on timeout show "No answer from the server; check the stack" and refresh. Never assume success.
 
-## Notifications (ntfy, no FCM)
-- The app subscribes to the owner's ntfy server with a long-lived streaming connection (`/<topic>/json` over OkHttp, or the WebSocket endpoint) in a foreground service. Not polling. Resume with the `since` parameter so nothing is lost across reconnects and app restarts.
-- Foreground service type: `specialUse` (a sideloaded app can declare it). `dataSync` is avoided because Android 15 and newer cap it at six hours a day. A persistent low-priority notification is required by Android.
-- Sources: ntfy and Gotify implement `AlertSource` (decision 2026-11-20); both feed one pipeline (dedupe, classify, route, notify) and share one foreground service.
-- Battery: the Alerts screen has a button to the battery settings (no first-run prompt). Restart paths in M6: START_STICKY, a boot and app-update receiver, and starting the service whenever the app opens. A WorkManager failsafe is deferred (see DECISIONS 2026-11-12).
-- Server side (v1, owner approved 2026-11-05): dockge-enhanced sends to an Apprise API container, which publishes to ntfy. This gives crash loop, unhealthy, image update and backup events as plain alerts. It does not emit container-stopped, status-change or node-offline events, and it gives no per-stack deep link.
-- Deep link: the app registers `dockge://instance/<id>/stack/<name>`. A tap opens the instance, and the stack when the app can find the name. Until a companion exists the app matches the instance by the base URL that image-update messages contain, and parses the stack name from the title as a best effort. If either fails it opens the instance list. This is fragile by design and is called out in the UI as best effort.
-- Possible companion (decision deferred): a small relay or poller that turns Dockge state into structured ntfy events with a click URL. Design is open; it is not part of v1 unless the owner asks.
-- Lock-screen text stays generic (no stack names until unlocked).
+## Notifications (direct watching, no notification server, no FCM)
+Decision 2026-11-20 (reverses the ntfy design of 2026-11-05; the ntfy and Gotify listener code exists only in git history, commits 4d01e32 and aac29c4). The app watches the saved instances itself.
+- Image updates: the update status the sessions already keep (`SessionManager.updates`, asked at connect, every 5 min and on resume). `AlertEngine.onUpdates` raises one alert per stack for a new image or a new remote digest.
+- Crash loops, unhealthy containers, failed backups, security findings: `GET <instance>/api/monitoring/overview` (admin only, `Authorization: Bearer <saved session token>`, the same JWT as the socket login), polled every 60 s per connected instance by `AlertWatcher`. It returns the last backup attempt, critical or high Trivy findings, and the 10 newest crash and health events (the server keeps up to 50 for 24 h, in memory). Events have no id, so the key is container id plus timestamp.
+- Memory: `SeenStore` (per instance) keeps the keys already handled, at most 500 plus one "baseline" marker per source. The first look at a source per instance is silent. A kind that is switched off is still remembered, so switching it on never floods.
+- Not watchable this way: cleanup, federation incidents and Dockge self-update reports (they exist only as Apprise or Discord messages). Linked servers' own crash and health events (the feed is REST on the instance, not proxied by the `agent` envelope; unverified).
+- Foreground service (`specialUse`, not `dataSync`: capped at 6 h a day on Android 15) keeps the process, and so the sessions and the watcher, alive while alerts are on. START_STICKY, a boot and app-update receiver, and starting it whenever the app opens. No WorkManager failsafe yet.
+- Alerts: generic lock-screen text per kind, details after unlocking, tap opens `dockge://instance/<id>[/stack/<name>?endpoint=]`. Crash alerts guess the stack from the container name (`<stack>-<service>-<n>`, longest stack name that prefixes it); health events carry the stack name; updates and security findings name the stack.
+- Settings: master switch plus Updates, Containers, Backups, Security. Battery hint button. Notification permission on Android 13 and newer.
 
 ## Security rules
 - HTTPS only in release builds, no redirects followed, no cleartext. LAN instances use real certificates through the reverse proxy, so no custom trust store.

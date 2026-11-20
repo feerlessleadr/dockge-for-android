@@ -10,7 +10,7 @@ import android.os.IBinder
 import com.feerlessleadr.dockge.DockgeApp
 
 /**
- * Foreground service that keeps the process (and so the alert streams owned by the [AlertListener]s) alive while an alert source is
+ * Foreground service that keeps the process (and so the [AlertWatcher]) alive while alerts are
  * enabled. It owns no logic of its own. START_STICKY: if Android kills it, Android starts it again.
  */
 class AlertService : Service() {
@@ -25,16 +25,16 @@ class AlertService : Service() {
         } else {
             startForeground(AlertNotifier.SERVICE_NOTIFICATION_ID, notification)
         }
-        if (!container.alerts.anyEnabled()) {
+        if (!container.alerts.settings().enabled) {
             stopSelf()
             return START_NOT_STICKY
         }
-        container.alerts.applyAll()
+        container.alerts.watcher.apply()
         return START_STICKY
     }
 }
 
-/** Starts the service again after a reboot or an app update, when an alert source is enabled. */
+/** Starts the service again after a reboot or an app update, when alerts are enabled. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
