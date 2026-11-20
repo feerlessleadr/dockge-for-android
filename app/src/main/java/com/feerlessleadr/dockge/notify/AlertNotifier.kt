@@ -45,7 +45,7 @@ class AlertNotifier(private val context: Context) {
      * Shows one alert. The lock screen shows only the generic [AlertKind.publicTitle]; title and text appear after
      * unlocking. [target] decides where a tap goes: a stack, an instance, or just the app.
      */
-    fun post(message: NtfyMessage, kind: AlertKind, target: AlertTarget?) {
+    fun post(message: AlertMessage, kind: AlertKind, target: AlertTarget?) {
         val id = message.id.hashCode()
         val public = NotificationCompat.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_dockge)

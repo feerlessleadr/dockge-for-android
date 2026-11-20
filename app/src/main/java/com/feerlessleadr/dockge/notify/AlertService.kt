@@ -10,10 +10,10 @@ import android.os.IBinder
 import com.feerlessleadr.dockge.DockgeApp
 
 /**
- * Foreground service that keeps the process (and so the ntfy stream owned by [NtfyListener]) alive while ntfy is
+ * Foreground service that keeps the process (and so the alert streams owned by the [AlertListener]s) alive while an alert source is
  * enabled. It owns no logic of its own. START_STICKY: if Android kills it, Android starts it again.
  */
-class NtfyService : Service() {
+class AlertService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -25,20 +25,20 @@ class NtfyService : Service() {
         } else {
             startForeground(AlertNotifier.SERVICE_NOTIFICATION_ID, notification)
         }
-        if (!container.ntfy.settings().enabled) {
+        if (!container.alerts.anyEnabled()) {
             stopSelf()
             return START_NOT_STICKY
         }
-        container.ntfy.listener.apply()
+        container.alerts.applyAll()
         return START_STICKY
     }
 }
 
-/** Starts the service again after a reboot or an app update, when ntfy is enabled. */
+/** Starts the service again after a reboot or an app update, when an alert source is enabled. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        ((context.applicationContext as? DockgeApp)?.container)?.ntfy?.startServiceIfEnabled()
+        ((context.applicationContext as? DockgeApp)?.container)?.alerts?.startServiceIfEnabled()
     }
 }

@@ -64,7 +64,7 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val ntfy get() = container.ntfy
+    val alerts get() = container.alerts
 
     fun get(id: String): Instance? = container.instances.get(id)
 

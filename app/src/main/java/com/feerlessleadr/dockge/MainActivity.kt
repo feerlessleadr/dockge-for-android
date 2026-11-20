@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
         // Coming back after the screen was off: sockets may be half dead, so check them and rebuild stale ones.
         container.sessions.recover()
         // The app is in the foreground, so this is a safe moment to (re)start the alert service if it is enabled.
-        container.ntfy.startServiceIfEnabled()
+        container.alerts.startServiceIfEnabled()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

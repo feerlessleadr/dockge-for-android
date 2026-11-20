@@ -14,9 +14,13 @@ import com.feerlessleadr.dockge.notify.AlertNotifier
 import com.feerlessleadr.dockge.notify.AlertRouting
 import com.feerlessleadr.dockge.notify.AlertTarget
 import com.feerlessleadr.dockge.notify.NtfyClient
-import com.feerlessleadr.dockge.notify.NtfyController
-import com.feerlessleadr.dockge.notify.NtfyListener
-import com.feerlessleadr.dockge.notify.PrefsNtfyStore
+import com.feerlessleadr.dockge.notify.AlertDeduper
+import com.feerlessleadr.dockge.notify.AlertMessage
+import com.feerlessleadr.dockge.notify.AlertSources
+import com.feerlessleadr.dockge.notify.GotifyClient
+import com.feerlessleadr.dockge.notify.SourceController
+import com.feerlessleadr.dockge.notify.AlertListener
+import com.feerlessleadr.dockge.notify.PrefsSourceStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,16 +38,44 @@ class AppContainer(app: Application) {
     val pendingTarget = MutableStateFlow<AlertTarget?>(null)
 
     val notifier = AlertNotifier(app)
-    private val ntfyStore = PrefsNtfyStore(app)
-    private val ntfyClient = NtfyClient()
-    private val ntfyListener = NtfyListener(ntfyStore, vault, ntfyClient, scope) { message ->
+    // Alerts from every enabled source go through the same steps. If Dockge sends one event to several services,
+    // the same title and text within two minutes is shown once.
+    private val deduper = AlertDeduper()
+    private fun handleAlert(message: AlertMessage) {
+        if (!deduper.firstSighting(message.title, message.message)) return
         val kind = AlertClassifier.kind(message.title, message.message)
-        val target = AlertRouting.resolve(message, instances.instances.value) { id ->
+        val target = AlertRouting.resolve(message, kind, instances.instances.value) { id ->
             sessions.stackLists.value[id].orEmpty().flatMap { server -> server.stacks.map { server.endpoint to it.name } }
         }
         notifier.post(message, kind, target)
     }
-    val ntfy = NtfyController(app, ntfyStore, vault, ntfyListener, ntfyClient, allowCleartext = BuildConfig.DEBUG)
+
+    val alerts = AlertSources(app)
+    private val ntfyClient = NtfyClient()
+    private val ntfyStore = PrefsSourceStore(app, "ntfy")
+    private val gotifyStore = PrefsSourceStore(app, "gotify")
+
+    init {
+        val cleartext = BuildConfig.DEBUG
+        alerts.ntfy = SourceController(
+            label = "ntfy", store = ntfyStore, vault = vault, tokenKey = "ntfy-access-token",
+            listener = AlertListener(ntfyStore, vault, ntfyClient, "ntfy-access-token", scope, needsTopic = true, onMessage = ::handleAlert),
+            allowCleartext = cleartext, usesTopic = true, tokenRequired = false,
+            publish = { s, token -> ntfyClient.publish(s.serverUrl, s.topic, token, "Dockge test", "This message came from the Dockge app.") },
+            onChanged = alerts::updateService,
+        )
+        alerts.gotify = SourceController(
+            label = "Gotify", store = gotifyStore, vault = vault, tokenKey = "gotify-client-token",
+            listener = AlertListener(
+                gotifyStore, vault, GotifyClient(), "gotify-client-token", scope, needsTopic = false,
+                isNewer = { old, new -> (new.removePrefix("g").toLongOrNull() ?: 0L) > (old.removePrefix("g").toLongOrNull() ?: -1L) },
+                onMessage = ::handleAlert,
+            ),
+            allowCleartext = cleartext, usesTopic = false, tokenRequired = true,
+            publish = null,
+            onChanged = alerts::updateService,
+        )
+    }
 
     init {
         // When a network (or the VPN tunnel) comes back, do not wait for the socket library's backoff: rebuild the
@@ -66,7 +98,7 @@ class DockgeApp : Application() {
         container = AppContainer(this)
         // Saved instances reconnect (with their saved tokens) as soon as the process starts.
         container.sessions.start()
-        // Alerts: while the process lives the ntfy stream runs; the foreground service keeps the process alive.
-        container.ntfy.listener.apply()
+        // Alerts: while the process lives the alert streams run; the foreground service keeps the process alive.
+        container.alerts.applyAll()
     }
 }

@@ -28,12 +28,12 @@
 
         <!-- Keeps the ntfy alert stream alive. specialUse: the dataSync type is capped at 6 h a day on Android 15. -->
         <service
-            android:name=".notify.NtfyService"
+            android:name=".notify.AlertService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps one connection to the user's own ntfy server open to receive alerts (no push service is available)." />
+                android:value="Keeps one connection per alert source (the user's own ntfy or Gotify server) open to receive alerts (no push service is available)." />
         </service>
 
         <receiver

@@ -20,18 +20,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
-private class MemoryNtfyStore(var settings: NtfySettings = NtfySettings(true, "https://ntfy.example.com", "dockge")) : NtfyStore {
+private class MemorySourceStore(var settings: SourceSettings = SourceSettings(true, "https://ntfy.example.com", "dockge")) : SourceStore {
     var cursor: String? = null
     override fun load() = settings
-    override fun save(settings: NtfySettings) { this.settings = settings }
+    override fun save(settings: SourceSettings) { this.settings = settings }
     override fun cursor() = cursor
     override fun saveCursor(id: String) { cursor = id }
 }
 
-private class FakeSource(val script: (call: Int, since: String) -> Flow<NtfyEvent>) : NtfySource {
+private class FakeSource(val script: (call: Int, since: String) -> Flow<AlertEvent>) : AlertSource {
     val sinces = mutableListOf<String>()
     val tokens = mutableListOf<String?>()
-    override fun stream(serverUrl: String, topic: String, token: String?, since: String): Flow<NtfyEvent> {
+    override fun stream(serverUrl: String, topic: String, token: String?, since: String): Flow<AlertEvent> {
         sinces += since
         tokens += token
         return script(sinces.size, since)
@@ -39,7 +39,7 @@ private class FakeSource(val script: (call: Int, since: String) -> Flow<NtfyEven
 }
 
 private fun msg(id: String, title: String = "t", body: String = "b") =
-    NtfyMessage(id, 1_700_000_000, "dockge", title, body, 3, emptyList())
+    AlertMessage(id, 1_700_000_000, "dockge", title, body, 3, emptyList())
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NtfyTest {
@@ -75,7 +75,7 @@ class NtfyTest {
 
     @Test fun validationCleansTheServerAndChecksTheTopic() {
         val ok = NtfyValidation.check(" ntfy.example.com/ ", " my_topic-1 ", true, allowCleartext = false).getOrThrow()
-        assertEquals(NtfySettings(true, "https://ntfy.example.com", "my_topic-1"), ok)
+        assertEquals(SourceSettings(true, "https://ntfy.example.com", "my_topic-1"), ok)
         assertTrue(NtfyValidation.check("http://ntfy.example.com", "t", true, false).isFailure)
         assertTrue(NtfyValidation.check("http://ntfy.example.com", "t", true, true).isSuccess)
         assertTrue(NtfyValidation.check("https://ntfy.example.com", "bad topic", true, false).isFailure)
@@ -98,8 +98,8 @@ class NtfyTest {
             )
             server.start()
             val events = NtfyClient().stream(server.url("/").toString().trimEnd('/'), "dockge", "tk_secret", "m0").toList()
-            assertEquals(NtfyEvent.Open, events[0])
-            assertEquals(listOf("m1", "m2"), events.drop(1).map { (it as NtfyEvent.Message).message.id })
+            assertEquals(AlertEvent.Open, events[0])
+            assertEquals(listOf("m1", "m2"), events.drop(1).map { (it as AlertEvent.Message).message.id })
             val request = server.takeRequest()
             assertEquals("/dockge/json?since=m0", request.path)
             assertEquals("Bearer tk_secret", request.headers["Authorization"])
@@ -120,7 +120,7 @@ class NtfyTest {
             server.enqueue(MockResponse().setResponseCode(401))
             server.start()
             val r = runCatching { NtfyClient().stream(server.url("/").toString().trimEnd('/'), "dockge", null, "1").toList() }
-            val e = r.exceptionOrNull() as NtfyHttpException
+            val e = r.exceptionOrNull() as SourceHttpException
             assertEquals(401, e.code)
             assertTrue(e.message!!.contains("access token"))
         }
@@ -131,7 +131,7 @@ class NtfyTest {
             server.enqueue(MockResponse().setResponseCode(302).addHeader("Location", "http://elsewhere.invalid/"))
             server.start()
             val r = runCatching { NtfyClient().stream(server.url("/").toString().trimEnd('/'), "dockge", "tk", "1").toList() }
-            assertEquals(302, (r.exceptionOrNull() as NtfyHttpException).code)
+            assertEquals(302, (r.exceptionOrNull() as SourceHttpException).code)
             assertEquals(1, server.requestCount)
         }
     }
@@ -154,30 +154,30 @@ class NtfyTest {
     // --- listener ---
 
     @Test fun firstStartBeginsNowThenHandsOverMessagesAndKeepsTheCursor() = runTest {
-        val store = MemoryNtfyStore()
+        val store = MemorySourceStore()
         val got = mutableListOf<String>()
-        val source = FakeSource { _, _ -> flow { emit(NtfyEvent.Open); emit(NtfyEvent.Message(msg("m1"))); kotlinx.coroutines.awaitCancellation() } }
-        val listener = NtfyListener(store, MemoryVault(), source, backgroundScope, { 1_700_000_123_456L }) { got += it.id }
+        val source = FakeSource { _, _ -> flow { emit(AlertEvent.Open); emit(AlertEvent.Message(msg("m1"))); kotlinx.coroutines.awaitCancellation() } }
+        val listener = AlertListener(store, MemoryVault(), source, "k", backgroundScope, clock = { 1_700_000_123_456L }) { got += it.id }
         listener.apply(); runCurrent()
         assertEquals(listOf("1700000123"), source.sinces)
         assertEquals(listOf("m1"), got)
         assertEquals("m1", store.cursor)
-        assertTrue(listener.state.value is NtfyState.Connected)
+        assertTrue(listener.state.value is SourceState.Connected)
     }
 
     @Test fun reconnectsWithTheCursorAndBacksOffUpToAMinute() = runTest {
-        val store = MemoryNtfyStore()
+        val store = MemorySourceStore()
         val times = mutableListOf<Long>()
         val source = FakeSource { call, _ ->
             times += currentTime
             flow {
-                if (call == 1) { emit(NtfyEvent.Open); emit(NtfyEvent.Message(msg("m1"))) }
+                if (call == 1) { emit(AlertEvent.Open); emit(AlertEvent.Message(msg("m1"))) }
                 throw IOException("boom $call")
             }
         }
-        val listener = NtfyListener(store, MemoryVault(), source, backgroundScope, { 0L }) { }
+        val listener = AlertListener(store, MemoryVault(), source, "k", backgroundScope, clock = { 0L }) { }
         listener.apply(); runCurrent()
-        assertEquals(NtfyState.Failed("boom 1"), listener.state.value)
+        assertEquals(SourceState.Failed("boom 1"), listener.state.value)
         advanceTimeBy(10 * 60_000L); runCurrent()
         // Call 1 opened, so the first wait is 1 s; calls that never open wait 2 s, 4 s, ... capped at 60 s.
         val gaps = times.zipWithNext { x, y -> y - x }.take(8)
@@ -189,45 +189,45 @@ class NtfyTest {
     @Test fun aRepeatedMessageIsHandledOnce() = runTest {
         val got = mutableListOf<String>()
         val source = FakeSource { _, _ ->
-            flow { emit(NtfyEvent.Open); emit(NtfyEvent.Message(msg("a"))); emit(NtfyEvent.Message(msg("a"))); emit(NtfyEvent.Message(msg("b"))); kotlinx.coroutines.awaitCancellation() }
+            flow { emit(AlertEvent.Open); emit(AlertEvent.Message(msg("a"))); emit(AlertEvent.Message(msg("a"))); emit(AlertEvent.Message(msg("b"))); kotlinx.coroutines.awaitCancellation() }
         }
-        NtfyListener(MemoryNtfyStore(), MemoryVault(), source, backgroundScope, { 0L }) { got += it.id }.apply { apply() }
+        AlertListener(MemorySourceStore(), MemoryVault(), source, "k", backgroundScope, clock = { 0L }) { got += it.id }.apply { apply() }
         runCurrent()
         assertEquals(listOf("a", "b"), got)
     }
 
     @Test fun disabledOrIncompleteSettingsOpenNothing() = runTest {
         val source = FakeSource { _, _ -> flow { } }
-        val store = MemoryNtfyStore(NtfySettings(false, "https://ntfy.example.com", "dockge"))
-        val listener = NtfyListener(store, MemoryVault(), source, backgroundScope, { 0L }) { }
+        val store = MemorySourceStore(SourceSettings(false, "https://ntfy.example.com", "dockge"))
+        val listener = AlertListener(store, MemoryVault(), source, "k", backgroundScope, clock = { 0L }) { }
         listener.apply(); runCurrent()
-        assertEquals(NtfyState.Off, listener.state.value)
-        store.settings = NtfySettings(true, "", "")
+        assertEquals(SourceState.Off, listener.state.value)
+        store.settings = SourceSettings(true, "", "")
         listener.apply(); runCurrent()
-        assertEquals(NtfyState.Off, listener.state.value)
+        assertEquals(SourceState.Off, listener.state.value)
         assertTrue(source.sinces.isEmpty())
     }
 
     @Test fun savingNewSettingsRestartsTheStreamAndTurningOffStopsIt() = runTest {
-        val store = MemoryNtfyStore()
-        val vault = MemoryVault().also { it.put(NtfyListener.TOKEN_KEY, "tk") }
-        val source = FakeSource { _, _ -> flow { emit(NtfyEvent.Open); kotlinx.coroutines.awaitCancellation() } }
-        val listener = NtfyListener(store, vault, source, backgroundScope, { 0L }) { }
+        val store = MemorySourceStore()
+        val vault = MemoryVault().also { it.put("k", "tk") }
+        val source = FakeSource { _, _ -> flow { emit(AlertEvent.Open); kotlinx.coroutines.awaitCancellation() } }
+        val listener = AlertListener(store, vault, source, "k", backgroundScope, clock = { 0L }) { }
         listener.apply(); runCurrent()
         listener.apply(); runCurrent()
         assertEquals(2, source.sinces.size)
         assertEquals(listOf<String?>("tk", "tk"), source.tokens)
         store.settings = store.settings.copy(enabled = false)
         listener.apply(); runCurrent()
-        assertEquals(NtfyState.Off, listener.state.value)
+        assertEquals(SourceState.Off, listener.state.value)
         assertEquals(2, source.sinces.size)
     }
 
     @Test fun anAccessErrorIsShownAsTheStateMessage() = runTest {
-        val source = FakeSource { _, _ -> flow { throw NtfyHttpException(403) } }
-        val listener = NtfyListener(MemoryNtfyStore(), MemoryVault(), source, backgroundScope, { 0L }) { }
+        val source = FakeSource { _, _ -> flow { throw SourceHttpException(403) } }
+        val listener = AlertListener(MemorySourceStore(), MemoryVault(), source, "k", backgroundScope, clock = { 0L }) { }
         listener.apply(); runCurrent()
-        val state = listener.state.value as NtfyState.Failed
+        val state = listener.state.value as SourceState.Failed
         assertTrue(state.message.contains("access token"))
     }
 
@@ -237,7 +237,7 @@ class NtfyTest {
         assertEquals(AlertKind.CrashLoop, AlertClassifier.kind("[nas] Crash loop - web", ""))
         assertEquals(AlertKind.Unhealthy, AlertClassifier.kind("[nas] Healthcheck unhealthy - db", ""))
         assertEquals(AlertKind.ImageUpdate, AlertClassifier.kind("[nas] 🐳 3 update(s) available", ""))
-        assertEquals(AlertKind.Other, AlertClassifier.kind("✅ Dockge-Enhanced updated", ""))
+        assertEquals(AlertKind.DockgeUpdate, AlertClassifier.kind("✅ Dockge-Enhanced updated", ""))
         assertEquals(AlertKind.Other, AlertClassifier.kind("Something else", ""))
     }
 
@@ -251,8 +251,8 @@ class NtfyTest {
         "id-a" to listOf("" to "web", "" to "web-app", "h2:5001" to "db"),
         "id-b" to listOf("" to "media"),
     )
-    private fun resolve(m: NtfyMessage, instances: List<Instance> = listOf(a, b)) =
-        AlertRouting.resolve(m, instances) { stacks[it].orEmpty() }
+    private fun resolve(m: AlertMessage, instances: List<Instance> = listOf(a, b), kind: AlertKind = AlertKind.Other) =
+        AlertRouting.resolve(m, kind, instances) { stacks[it].orEmpty() }
 
     @Test fun routesToTheInstanceWhoseAddressIsInTheMessage() {
         val t = resolve(msg("1", "Updates", "See https://b.example.com/dockge for details"))!!
