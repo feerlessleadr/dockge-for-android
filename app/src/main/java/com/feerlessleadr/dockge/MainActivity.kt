@@ -24,6 +24,7 @@ import com.feerlessleadr.dockge.ui.instances.InstanceListScreen
 import com.feerlessleadr.dockge.ui.instances.InstancesViewModel
 import com.feerlessleadr.dockge.ui.instances.NotificationsScreen
 import com.feerlessleadr.dockge.ui.instances.SettingsScreen
+import com.feerlessleadr.dockge.ui.instances.UpdatesScreen
 import com.feerlessleadr.dockge.ui.stacks.StackDetailScreen
 import com.feerlessleadr.dockge.ui.stacks.StackListScreen
 import com.feerlessleadr.dockge.ui.theme.DockgeTheme
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.feerlessleadr.dockge.ui.theme.ThemePrefs.load(this)
         enableEdgeToEdge()
         // A tap on an alert starts (or returns to) this activity with a dockge:// link.
         if (savedInstanceState == null) route(intent)
@@ -87,14 +89,21 @@ private fun AppNav() {
                 onEdit = { nav.navigate("edit?id=$it") },
                 onOpen = { nav.navigate("stacks/${Uri.encode(it)}") },
                 onDiagnostics = { nav.navigate("diag/${Uri.encode(it)}") },
+                onOpenUpdates = { nav.navigate("updates") },
                 onNavigate = goTab,
             )
         }
         composable(Tabs.ALERTS) {
-            NotificationsScreen(vm = vm, onNavigate = goTab)
+            NotificationsScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable(Tabs.SETTINGS) {
-            SettingsScreen(onNavigate = goTab)
+            SettingsScreen(vm = vm, onNavigate = goTab, onOpenAlerts = { nav.navigate(Tabs.ALERTS) })
+        }
+        composable("updates") {
+            UpdatesScreen(
+                vm = vm, onBack = { nav.popBackStack() },
+                onOpen = { iid, endpoint, name -> nav.navigate("stack/${Uri.encode(iid)}/${Uri.encode(name)}?endpoint=${Uri.encode(endpoint)}") },
+            )
         }
         composable(
             route = "edit?id={id}",

@@ -25,6 +25,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.feerlessleadr.dockge.ui.components.AppNavigationBar
 import com.feerlessleadr.dockge.ui.components.SectionHeader
 import com.feerlessleadr.dockge.ui.components.Tabs
+import com.feerlessleadr.dockge.ui.components.ScreenHeader
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -47,7 +48,7 @@ import com.feerlessleadr.dockge.notify.PollStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationsScreen(vm: InstancesViewModel, onNavigate: (String) -> Unit) {
+fun NotificationsScreen(vm: InstancesViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val controller = vm.alerts
     var settings by remember { mutableStateOf(controller.settings()) }
@@ -69,14 +70,12 @@ fun NotificationsScreen(vm: InstancesViewModel, onNavigate: (String) -> Unit) {
 
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = { LargeTopAppBar(title = { Text("Alerts") }, scrollBehavior = scroll) },
-        bottomBar = { AppNavigationBar(Tabs.ALERTS, onNavigate) },
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            ScreenHeader("Alerts", onBack = onBack)
             Text(
                 "The app watches your Dockge servers itself and notifies you. No notification server and no Google " +
                     "push are involved. While alerts are on, the app keeps its connections open in the background " +

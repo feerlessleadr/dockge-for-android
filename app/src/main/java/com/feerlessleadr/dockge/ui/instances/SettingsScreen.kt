@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,23 +47,56 @@ import com.feerlessleadr.dockge.ui.components.AppNavigationBar
 import com.feerlessleadr.dockge.ui.components.SectionHeader
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import com.feerlessleadr.dockge.ui.components.Tabs
+import com.feerlessleadr.dockge.ui.components.ScreenHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onNavigate: (String) -> Unit) {
+fun SettingsScreen(vm: InstancesViewModel, onNavigate: (String) -> Unit, onOpenAlerts: () -> Unit) {
     val context = LocalContext.current
     var selected by remember { mutableStateOf(AppIcon.current(context)) }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = { LargeTopAppBar(title = { Text("Settings") }, scrollBehavior = scroll) },
         bottomBar = { AppNavigationBar(Tabs.SETTINGS, onNavigate) },
     ) { padding ->
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            ScreenHeader("Settings")
+            SectionHeader("Notifications")
+            Card(
+                onClick = onOpenAlerts, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            ) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Alerts", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (vm.alerts.settings().enabled) "On. Updates, crash loops, unhealthy containers, backups, security." else "Off. Tap to choose what to be told about.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                }
+            }
+            SectionHeader("Appearance")
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Use wallpaper colors", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (com.feerlessleadr.dockge.ui.theme.ThemePrefs.supported) "Follow your Android theme instead of the app blue." else "Needs Android 12 or newer.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = com.feerlessleadr.dockge.ui.theme.ThemePrefs.dynamic,
+                        enabled = com.feerlessleadr.dockge.ui.theme.ThemePrefs.supported,
+                        onCheckedChange = { com.feerlessleadr.dockge.ui.theme.ThemePrefs.set(context, it) },
+                    )
+                }
+            }
             SectionHeader("App icon")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 AppIcon.entries.forEach { icon ->

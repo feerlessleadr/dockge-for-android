@@ -28,6 +28,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.feerlessleadr.dockge.R
 import com.feerlessleadr.dockge.ui.components.ListCard
 import com.feerlessleadr.dockge.ui.components.SectionHeader
+import com.feerlessleadr.dockge.ui.components.ScreenHeader
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import com.feerlessleadr.dockge.ui.components.StatusChip
 import com.feerlessleadr.dockge.ui.components.StatusTile
 import com.feerlessleadr.dockge.ui.components.Tone
@@ -139,17 +142,8 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
         }
     }
 
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = {
-            LargeTopAppBar(
-                title = { Text(stack?.title ?: stackName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
-                scrollBehavior = scroll,
-            )
-        },
-    ) { padding ->
+    var moreMenu by remember { mutableStateOf(false) }
+    Scaffold { padding ->
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = { refreshing = true; manualRefresh++; updateRefresh++ },
@@ -164,6 +158,22 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                item {
+                    ScreenHeader(
+                        stack?.title ?: stackName, onBack = onBack,
+                        actions = {
+                            Box {
+                                IconButton(onClick = { moreMenu = true }, enabled = canAct) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                                androidx.compose.material3.DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Down") },
+                                        onClick = { moreMenu = false; request(StackAction.Down, stack?.title ?: stackName) { vm.runAction(instanceId, endpoint, stackName, StackAction.Down) } },
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         stack?.let {
@@ -180,18 +190,32 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                 }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val pad = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        val running = stack?.status == com.feerlessleadr.dockge.api.StackStatus.Running
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (available.isNotEmpty()) {
                                 Button(
-                                    enabled = canAct,
+                                    enabled = canAct, contentPadding = pad,
                                     onClick = { request(StackAction.Update, stack?.title ?: stackName) { vm.updateStack(instanceId, endpoint, stackName) } },
-                                ) { Text("Update") }
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_update), null, Modifier.size(18.dp))
+                                    Text("Update", Modifier.padding(start = 6.dp))
+                                }
                             }
-                            StackAction.entries.filter { it != StackAction.Update }.forEach { a ->
+                            val shown = if (running) listOf(StackAction.Restart, StackAction.Stop) else listOf(StackAction.Start)
+                            shown.forEach { a ->
                                 FilledTonalButton(
-                                    enabled = canAct,
+                                    enabled = canAct, contentPadding = pad,
                                     onClick = { request(a, stack?.title ?: stackName) { vm.runAction(instanceId, endpoint, stackName, a) } },
-                                ) { Text(a.label) }
+                                ) {
+                                    val icon = when (a) {
+                                        StackAction.Start -> painterResource(R.drawable.ic_play)
+                                        StackAction.Stop -> painterResource(R.drawable.ic_stop)
+                                        else -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Refresh)
+                                    }
+                                    Icon(icon, null, Modifier.size(18.dp))
+                                    Text(a.label, Modifier.padding(start = 6.dp))
+                                }
                             }
                         }
                         if (!canAct && !anyRunning) {
@@ -251,7 +275,7 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     shown.forEach { a ->
                                         TextButton(
-                                            enabled = canAct,
+                                            enabled = canAct, contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 16.dp),
                                             onClick = {
                                                 val label = c.name.ifBlank { c.service }
                                                 request(a, label) { vm.runContainerAction(instanceId, endpoint, stackName, c.id, label, a) }
@@ -336,7 +360,7 @@ private fun UpdateSection(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = warn,
                             )
-                            ImageLinks.registryUrl(u.image)?.let { url -> TextButton(onClick = { openLink(url) }) { Text("Image page") } }
+                            ImageLinks.registryUrl(u.image)?.let { url -> TextButton(onClick = { openLink(url) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp)) { Text("Image page") } }
                         }
                     }
                     Text("The server has no changelog. The image page is the best place to read what changed.", style = MaterialTheme.typography.bodySmall, color = warn)

@@ -3,6 +3,8 @@ package com.feerlessleadr.dockge.ui.components
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
@@ -110,4 +112,36 @@ fun ListCard(
     }
     if (onClick != null) Card(onClick, modifier.fillMaxWidth(), enabled = enabled, shape = shape, colors = colors) { inner() }
     else Card(modifier.fillMaxWidth(), shape = shape, colors = colors) { inner() }
+}
+
+/** The screen title: compact, directly under the status bar (a back arrow row above it when [onBack] is given). */
+@Composable
+fun ScreenHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    onBack: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    androidx.compose.foundation.layout.Column(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp)) {
+        if (onBack != null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.IconButton(onClick = onBack) {
+                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                actions()
+            }
+        }
+        Text(
+            title,
+            Modifier.padding(horizontal = 4.dp, vertical = if (onBack == null) 12.dp else 0.dp),
+            style = MaterialTheme.typography.headlineMedium,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        subtitle?.let {
+            Text(it, Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }

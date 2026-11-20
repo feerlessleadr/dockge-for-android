@@ -56,6 +56,7 @@ import com.feerlessleadr.dockge.ui.components.ListCard
 import com.feerlessleadr.dockge.ui.components.StatusChip
 import com.feerlessleadr.dockge.ui.components.StatusTile
 import com.feerlessleadr.dockge.ui.components.Tabs
+import com.feerlessleadr.dockge.ui.components.ScreenHeader
 import com.feerlessleadr.dockge.ui.components.Tone
 import com.feerlessleadr.dockge.ui.components.container
 import com.feerlessleadr.dockge.ui.components.content
@@ -69,6 +70,7 @@ fun InstanceListScreen(
     onEdit: (String) -> Unit,
     onOpen: (String) -> Unit,
     onDiagnostics: (String) -> Unit,
+    onOpenUpdates: () -> Unit,
     onNavigate: (String) -> Unit,
 ) {
     val rows by vm.rows.collectAsState()
@@ -80,8 +82,6 @@ fun InstanceListScreen(
     val totalUpdates = withUpdates.sumOf { it.updateCount ?: 0 }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = { LargeTopAppBar(title = { Text("Instances") }, scrollBehavior = scroll) },
         bottomBar = { AppNavigationBar(Tabs.INSTANCES, onNavigate) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -92,8 +92,11 @@ fun InstanceListScreen(
         },
     ) { padding ->
         if (rows.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("No instances yet. Add your first Dockge server.", style = MaterialTheme.typography.bodyLarge)
+            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
+                ScreenHeader("Instances")
+                Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text("No instances yet. Add your first Dockge server.", style = MaterialTheme.typography.bodyLarge)
+                }
             }
         } else {
             LazyColumn(
@@ -105,17 +108,12 @@ fun InstanceListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
-                    Text(
-                        "${rows.size} ${if (rows.size == 1) "server" else "servers"}, $connected connected",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
-                    )
+                    ScreenHeader("Instances", subtitle = "${rows.size} ${if (rows.size == 1) "server" else "servers"}, $connected connected")
                 }
                 if (totalUpdates > 0) {
                     item {
                         ListCard(
-                            onClick = { withUpdates.firstOrNull { it.state == ConnectionState.Connected }?.let { onOpen(it.instance.id) } },
+                            onClick = onOpenUpdates,
                             container = Tone.Warn.container(),
                         ) {
                             Icon(painterResource(R.drawable.ic_update), contentDescription = null, tint = Tone.Warn.content(), modifier = Modifier.size(24.dp))

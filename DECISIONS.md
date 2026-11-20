@@ -126,3 +126,9 @@
 - **Decision**: Material 3 with bottom navigation (Instances, Alerts, Settings), large collapsing titles, tonal cards with state tiles and chips, a filter row on the stack list, a restyled progress sheet, and a Settings tab with the icon chooser. Two icons as `activity-alias` entries; `MainActivity` loses its launcher filter. Spec in `docs/design.md`. Added `material-icons-core` (the few standard icons); app-specific icons are vector drawables.
 - **Rationale**: Keeps the platform's own look (dynamic color, themed icons) while giving the app structure. Aliases are the supported way to switch the launcher icon.
 - **Impact**: All screens under `ui/`, `ui/components/`, `Theme.kt`, `AppIcon.kt`, manifest, launcher resources, night theme. A pinned home-screen shortcut from 0.1.0 may need to be added again. No change to behavior, protocol or stored data.
+
+### 2026-11-20, 0.1.1: design corrections after the first device test
+- **Context**: The owner found the debug build "still looks like the original" and not like the approved mockups, and asked for a consolidated updates view and Alerts under Settings.
+- **Decision**: (1) The app's own blue palette is the default; wallpaper colors are an opt-in switch in Settings (dynamic color had replaced the palette). (2) Compact `ScreenHeader` instead of the large collapsing app bar. (3) Stack buttons by state with icons, Down moved to the overflow menu. (4) The updates banner opens a new Updates screen (all instances, grouped) instead of the first instance. (5) Bottom bar has only Instances and Settings; Alerts opens from Settings.
+- **Rationale**: Matches the mockups the owner approved; a banner that counts across instances should show across instances.
+- **Impact**: `Theme.kt` (`ThemePrefs`), `ScreenHeader`, `UpdatesScreen`, navigation in `MainActivity.kt`, Settings and Alerts screens. `docs/design.md` updated.

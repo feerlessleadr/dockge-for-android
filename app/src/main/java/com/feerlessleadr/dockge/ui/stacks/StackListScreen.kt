@@ -44,6 +44,7 @@ import com.feerlessleadr.dockge.api.Stack
 import com.feerlessleadr.dockge.api.StackStatus
 import com.feerlessleadr.dockge.data.ConnectionState
 import com.feerlessleadr.dockge.ui.components.ListCard
+import com.feerlessleadr.dockge.ui.components.ScreenHeader
 import com.feerlessleadr.dockge.ui.components.StatusChip
 import com.feerlessleadr.dockge.ui.components.StatusTile
 import com.feerlessleadr.dockge.ui.components.Tone
@@ -74,18 +75,13 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
     }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = {
-            LargeTopAppBar(
-                title = { Text(instance?.name ?: "Instance", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
-                scrollBehavior = scroll,
-            )
-        },
     ) { padding ->
         val all = servers
         if (all == null) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { Text("Waiting for the stack list...") }
+            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
+                ScreenHeader(instance?.name ?: "Instance", onBack = onBack)
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Waiting for the stack list...") }
+            }
             return@Scaffold
         }
         val allStacks = all.flatMap { it.stacks }
@@ -127,11 +123,9 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        "${allStacks.size} stacks, $running running" + if (multi) " on ${all.size} servers" else "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 4.dp),
+                    ScreenHeader(
+                        instance?.name ?: "Instance", onBack = onBack,
+                        subtitle = "${allStacks.size} stacks, $running running" + if (multi) " on ${all.size} servers" else "",
                     )
                     if (connection != ConnectionState.Connected) {
                         Text(
