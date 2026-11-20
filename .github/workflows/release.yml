@@ -79,7 +79,13 @@ jobs:
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/apksigner.txt" \
             || grep -q "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/apksigner.txt" \
             || { echo "::error::The APK is not signed with signature scheme v2 or v3."; exit 1; }
-          ACTUAL=$(grep -m1 "Signer #1 certificate SHA-256 digest:" "$RUNNER_TEMP/apksigner.txt" | awk '{print $NF}' | tr 'A-F' 'a-f')
+          # apksigner labels the line "Signer #1 certificate ..." in some versions and "V2 Signer: certificate ..." in
+          # newer ones. The pattern needs the word certificate, so the "public key SHA-256 digest" line never matches.
+          ACTUAL=$(grep -m1 -E "(Signer #1|V[0-9.]+ Signer:?) certificate SHA-256 digest:" "$RUNNER_TEMP/apksigner.txt" | awk '{print $NF}' | tr 'A-F' 'a-f') || true
+          if [ -z "$ACTUAL" ]; then
+            echo "::error::Could not read the signer certificate digest from the apksigner output."
+            exit 1
+          fi
           if [ "$ACTUAL" != "$(echo "$EXPECTED_CERT_SHA256" | tr 'A-F' 'a-f')" ]; then
             echo "::error::The APK is signed with certificate $ACTUAL, not the pinned release certificate."
             exit 1

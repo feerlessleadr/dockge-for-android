@@ -115,3 +115,10 @@
 ### 2026-11-20, M7: certificate pinned, R8 build tested on a phone
 - The owner read the release certificate SHA-256 from the keystore and it is pinned in `release.yml` (README and release notes show it). Whether the repo secret holds that same keystore is proven by the first tag run, which fails before publishing if it does not.
 - Owner tested the minified `.rtest` build on a phone: sign in, Restart, update, alerts and force-close and reopen all work, so no R8 runtime problem showed up in those flows. Not covered: 2FA login, token re-login after a server restart, and flows not tried.
+
+### 2026-11-20, M7: first release run (tag v0.1.0) failed safely at the signature check
+- PR 11 merged (046d317) and tag `v0.1.0` pushed on it. The Release workflow ran for the first time: tag-on-main check, release notes check, version computation, keystore restore and the signed R8 build all succeeded (so the repo secrets do hold a working keystore).
+- The "Verify signature, version and package" step failed, so nothing was published (no GitHub Release exists). The log shows the APK is v2 signed and its certificate SHA-256 is exactly the pinned `e412acf4...`, so the key is right. The failure was my parser: the newer apksigner on the runner prints `V2 Signer: certificate SHA-256 digest:` instead of `Signer #1 certificate SHA-256 digest:`, so the grep found nothing and `set -e` stopped the step without a message.
+- Lesson: the local apksigner (build-tools 36.0.0) and the runner's differ; I had tested the parsing only against the local format. The step now accepts both formats and fails with a clear message when it finds no digest. Tested against samples of both formats.
+- Still unexercised on the runner: the aapt2 package and version check, the rename and checksum step, and the release creation. A second failure there is possible; each step is safe (nothing is public until the last one).
+- The tag `v0.1.0` points at the commit with the old parser and has no release. It has to be recreated on the fixed commit (owner go-ahead needed) before the workflow can be run again.
