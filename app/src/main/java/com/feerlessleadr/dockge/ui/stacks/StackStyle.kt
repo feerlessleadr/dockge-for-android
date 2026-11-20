@@ -1,9 +1,13 @@
 package com.feerlessleadr.dockge.ui.stacks
 
+import androidx.annotation.DrawableRes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.feerlessleadr.dockge.R
 import com.feerlessleadr.dockge.api.StackStatus
+import com.feerlessleadr.dockge.ui.components.Tone
+import com.feerlessleadr.dockge.ui.theme.DockgeColors
 
 fun StackStatus.label(): String = when (this) {
     StackStatus.Running -> "Running"
@@ -16,21 +20,42 @@ fun StackStatus.label(): String = when (this) {
 
 @Composable
 fun StackStatus.color(): Color = when (this) {
-    StackStatus.Running -> Color(0xFF2E7D32)
-    StackStatus.Paused -> Color(0xFFEF6C00)
+    StackStatus.Running -> DockgeColors.status.ok
+    StackStatus.Paused -> DockgeColors.status.warn
     StackStatus.Exited -> MaterialTheme.colorScheme.error
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
+fun StackStatus.tone(): Tone = when (this) {
+    StackStatus.Running -> Tone.Ok
+    StackStatus.Paused -> Tone.Warn
+    StackStatus.Exited -> Tone.Error
+    else -> Tone.Neutral
+}
+
+@DrawableRes
+fun StackStatus.icon(): Int = when (this) {
+    StackStatus.Running -> R.drawable.ic_play
+    StackStatus.Paused -> R.drawable.ic_pause
+    else -> R.drawable.ic_stop
+}
+
 /** Color for a container state or health value as the server reports it. */
 @Composable
-fun containerColor(state: String, health: String): Color = when {
-    health == "unhealthy" -> MaterialTheme.colorScheme.error
-    health == "starting" -> Color(0xFFEF6C00)
-    state == "running" -> Color(0xFF2E7D32)
-    state == "paused" || state == "restarting" -> Color(0xFFEF6C00)
-    state == "exited" || state == "dead" -> MaterialTheme.colorScheme.error
+fun containerColor(state: String, health: String): Color = when (containerTone(state, health)) {
+    Tone.Ok -> DockgeColors.status.ok
+    Tone.Warn -> DockgeColors.status.warn
+    Tone.Error -> MaterialTheme.colorScheme.error
     else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+fun containerTone(state: String, health: String): Tone = when {
+    health == "unhealthy" -> Tone.Error
+    health == "starting" -> Tone.Warn
+    state == "running" -> Tone.Ok
+    state == "paused" || state == "restarting" -> Tone.Warn
+    state == "exited" || state == "dead" -> Tone.Error
+    else -> Tone.Neutral
 }
 
 fun containerLabel(state: String, health: String): String =

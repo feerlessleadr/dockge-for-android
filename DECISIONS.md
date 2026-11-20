@@ -119,3 +119,10 @@
 - **Decision**: With the owner's go-ahead, deleted the unreleased tag v0.1.0 (remote and local) and recreated it on the fixed main commit 07d2a72. Only possible because no GitHub Release existed for it. Rule for the future: a tag that produced a public release is never moved or deleted; a bad release is superseded by the next patch version.
 - **Rationale**: Keeps version 0.1.0 matching its notes and README, and nothing external had consumed the tag.
 - **Impact**: v0.1.0 release published (asset dockge-for-android-v0.1.0.apk, SHA-256 0add28609737b1b74a190d0379fafd003576ad33a6cf7b0ee95eff2a44d5b302, signer certificate e412acf4...a0f3 as pinned).
+
+### 2026-11-20, 0.1.1: Material 3 redesign and two selectable icons
+- **Context**: After the first release the owner asked to work on overall design, first "Apple-like", then (after seeing what that would conflict with) Material 3 as it is today. They approved four mockups and asked for both icon concepts to be selectable.
+- **Options considered**: An iOS look on Compose (rejected by the owner); Material 3 restyle without structural change; Material 3 with bottom navigation, large titles and tonal cards. Icon switching by `activity-alias` (standard, no extra permission) versus one fixed icon.
+- **Decision**: Material 3 with bottom navigation (Instances, Alerts, Settings), large collapsing titles, tonal cards with state tiles and chips, a filter row on the stack list, a restyled progress sheet, and a Settings tab with the icon chooser. Two icons as `activity-alias` entries; `MainActivity` loses its launcher filter. Spec in `docs/design.md`. Added `material-icons-core` (the few standard icons); app-specific icons are vector drawables.
+- **Rationale**: Keeps the platform's own look (dynamic color, themed icons) while giving the app structure. Aliases are the supported way to switch the launcher icon.
+- **Impact**: All screens under `ui/`, `ui/components/`, `Theme.kt`, `AppIcon.kt`, manifest, launcher resources, night theme. A pinned home-screen shortcut from 0.1.0 may need to be added again. No change to behavior, protocol or stored data.

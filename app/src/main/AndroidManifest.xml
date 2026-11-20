@@ -19,21 +19,42 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop" />
+
+        <!-- The launcher entries. Exactly one is enabled; the user picks in Settings (see AppIcon.kt). -->
+        <activity-alias
+            android:name=".IconBlue"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconLight"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_light"
+            android:roundIcon="@mipmap/ic_launcher_light"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
-        <!-- Keeps the ntfy alert stream alive. specialUse: the dataSync type is capped at 6 h a day on Android 15. -->
+        <!-- Keeps the alert watcher alive. specialUse: the dataSync type is capped at 6 h a day on Android 15. -->
         <service
             android:name=".notify.AlertService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps one connection per alert source (the user's own ntfy or Gotify server) open to receive alerts (no push service is available)." />
+                android:value="Keeps one connection per saved Dockge instance open to watch for alerts (no push service is available)." />
         </service>
 
         <receiver

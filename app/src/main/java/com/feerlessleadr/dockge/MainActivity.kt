@@ -17,11 +17,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.feerlessleadr.dockge.notify.DeepLink
+import com.feerlessleadr.dockge.ui.components.Tabs
 import com.feerlessleadr.dockge.ui.instances.DiagnosticsScreen
 import com.feerlessleadr.dockge.ui.instances.InstanceEditScreen
 import com.feerlessleadr.dockge.ui.instances.InstanceListScreen
 import com.feerlessleadr.dockge.ui.instances.InstancesViewModel
 import com.feerlessleadr.dockge.ui.instances.NotificationsScreen
+import com.feerlessleadr.dockge.ui.instances.SettingsScreen
 import com.feerlessleadr.dockge.ui.stacks.StackDetailScreen
 import com.feerlessleadr.dockge.ui.stacks.StackListScreen
 import com.feerlessleadr.dockge.ui.theme.DockgeTheme
@@ -66,23 +68,33 @@ private fun AppNav() {
         pending.value = null
         // An alert for an instance that is no longer saved just leaves the user on the list.
         if (vm.get(t.instanceId) == null) return@LaunchedEffect
-        nav.popBackStack("list", inclusive = false)
+        nav.popBackStack(Tabs.INSTANCES, inclusive = false)
         nav.navigate("stacks/${Uri.encode(t.instanceId)}")
         t.stackName?.let { nav.navigate("stack/${Uri.encode(t.instanceId)}/${Uri.encode(it)}?endpoint=${Uri.encode(t.endpoint)}") }
     }
-    NavHost(navController = nav, startDestination = "list") {
-        composable("list") {
+    val goTab: (String) -> Unit = { route ->
+        nav.navigate(route) {
+            popUpTo(Tabs.INSTANCES) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+    NavHost(navController = nav, startDestination = Tabs.INSTANCES) {
+        composable(Tabs.INSTANCES) {
             InstanceListScreen(
                 vm = vm,
                 onAdd = { nav.navigate("edit") },
                 onEdit = { nav.navigate("edit?id=$it") },
                 onOpen = { nav.navigate("stacks/${Uri.encode(it)}") },
                 onDiagnostics = { nav.navigate("diag/${Uri.encode(it)}") },
-                onNotifications = { nav.navigate("notifications") },
+                onNavigate = goTab,
             )
         }
-        composable("notifications") {
-            NotificationsScreen(vm = vm, onBack = { nav.popBackStack() })
+        composable(Tabs.ALERTS) {
+            NotificationsScreen(vm = vm, onNavigate = goTab)
+        }
+        composable(Tabs.SETTINGS) {
+            SettingsScreen(onNavigate = goTab)
         }
         composable(
             route = "edit?id={id}",

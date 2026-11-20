@@ -15,15 +15,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.feerlessleadr.dockge.ui.components.AppNavigationBar
+import com.feerlessleadr.dockge.ui.components.SectionHeader
+import com.feerlessleadr.dockge.ui.components.Tabs
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,7 +47,7 @@ import com.feerlessleadr.dockge.notify.PollStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationsScreen(vm: InstancesViewModel, onBack: () -> Unit) {
+fun NotificationsScreen(vm: InstancesViewModel, onNavigate: (String) -> Unit) {
     val context = LocalContext.current
     val controller = vm.alerts
     var settings by remember { mutableStateOf(controller.settings()) }
@@ -61,13 +67,11 @@ fun NotificationsScreen(vm: InstancesViewModel, onBack: () -> Unit) {
         if (new.enabled && permissionMissing) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
+    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Alerts") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
-            )
-        },
+        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
+        topBar = { LargeTopAppBar(title = { Text("Alerts") }, scrollBehavior = scroll) },
+        bottomBar = { AppNavigationBar(Tabs.ALERTS, onNavigate) },
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
@@ -87,7 +91,7 @@ fun NotificationsScreen(vm: InstancesViewModel, onBack: () -> Unit) {
                 OutlinedButton(onClick = { permission.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text("Allow notifications") }
             }
 
-            Card(Modifier.fillMaxWidth()) {
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     ToggleRow("Alerts", "Watch all saved instances in the background", settings.enabled) { change(settings.copy(enabled = it)) }
                     ToggleRow("Image updates", "A new update was found", settings.updates) { change(settings.copy(updates = it)) }
@@ -97,7 +101,7 @@ fun NotificationsScreen(vm: InstancesViewModel, onBack: () -> Unit) {
                 }
             }
 
-            Text("Instances", style = MaterialTheme.typography.titleMedium)
+            SectionHeader("Instances")
             if (rows.isEmpty()) Text("No instances yet.", style = MaterialTheme.typography.bodyMedium)
             rows.forEach { row ->
                 val feed = when (val s = status[row.instance.id]) {
@@ -121,7 +125,7 @@ fun NotificationsScreen(vm: InstancesViewModel, onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
             )
 
-            Text("Battery", style = MaterialTheme.typography.titleMedium)
+            SectionHeader("Battery")
             Text(
                 "Android may stop background apps to save power. If alerts arrive late or stop, set this app to " +
                     "Unrestricted battery use.",
