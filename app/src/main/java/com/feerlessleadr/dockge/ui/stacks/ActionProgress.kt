@@ -2,14 +2,22 @@ package com.feerlessleadr.dockge.ui.stacks
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,14 +39,16 @@ import com.feerlessleadr.dockge.core.ComposeProgress
 import com.feerlessleadr.dockge.core.StepState
 import com.feerlessleadr.dockge.data.ActionOutcome
 import com.feerlessleadr.dockge.data.StackAction
+import com.feerlessleadr.dockge.ui.components.Tone
+import com.feerlessleadr.dockge.ui.components.content
 import com.feerlessleadr.dockge.ui.instances.ActionUi
 
-private val ROW_HEIGHT = 22.dp
+private val ROW_HEIGHT = 28.dp
 
 /**
- * The action sheet: a fixed-size screen (nothing scrolls while the action runs) with a progress bar, the phase, the
- * last few items and one line of detail. The raw terminal output is one tap away. The percentage comes from what
- * compose prints; when it prints nothing usable the bar stays indeterminate.
+ * The action sheet: a fixed-size screen (nothing scrolls while the action runs) with a title, the phase, a progress
+ * bar with the percentage, a checklist of the last few items and one line of detail. The raw terminal output is one
+ * tap away. The percentage comes from what compose prints; when it prints nothing usable the bar stays indeterminate.
  */
 @Composable
 fun ActionProgressContent(
@@ -59,47 +70,47 @@ fun ActionProgressContent(
     // A failure is the moment the raw output matters most, so open it then.
     LaunchedEffect(failed) { if (failed) showFull = true }
 
-    Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        (state.outcome as? ActionOutcome.Failed)?.let { Text(it.message, color = MaterialTheme.colorScheme.error) }
+    val phase = when {
+        succeeded -> "Done"
+        failed -> "Stopped with an error"
+        state.output.isBlank() -> "Waiting for the server..."
+        else -> view.phase
+    }
 
+    Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        (state.outcome as? ActionOutcome.Failed)?.let { Text(it.message, color = MaterialTheme.colorScheme.error) }
+        Text(phase, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Progress", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (target != null) Text("${(animated * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+        }
+        val barModifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
         if (target == null && state.running) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
+            LinearProgressIndicator(barModifier)
         } else {
             LinearProgressIndicator(
                 progress = { animated },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = barModifier,
                 color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                drawStopIndicator = {},
             )
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                when {
-                    succeeded -> "Done"
-                    failed -> "Stopped with an error"
-                    state.output.isBlank() -> "Waiting for the server..."
-                    else -> view.phase
-                },
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            if (target != null) Text("${(animated * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
         }
 
         if (!showFull) {
             // Fixed height: rows come and go but the sheet never changes size.
-            Column(Modifier.fillMaxWidth().height(ROW_HEIGHT * ComposeProgress.MAX_ITEMS)) {
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp).height(ROW_HEIGHT * ComposeProgress.MAX_ITEMS)) {
                 view.items.forEach { item ->
                     Row(Modifier.fillMaxWidth().height(ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            when (item.state) { StepState.Done -> "✔"; StepState.Failed -> "✘"; StepState.Working -> "…" },
-                            Modifier.padding(end = 8.dp),
-                            color = when (item.state) {
-                                StepState.Done -> MaterialTheme.colorScheme.primary
-                                StepState.Failed -> MaterialTheme.colorScheme.error
-                                StepState.Working -> MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
+                        Box(Modifier.padding(end = 12.dp).size(20.dp), contentAlignment = Alignment.Center) {
+                            when (item.state) {
+                                StepState.Done -> Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp), tint = Tone.Ok.content())
+                                StepState.Failed -> Icon(Icons.Filled.Warning, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
+                                StepState.Working -> CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            }
+                        }
                         Text(
                             "${item.kind} ${item.name}",
                             Modifier.weight(1f),
@@ -115,6 +126,7 @@ fun ActionProgressContent(
                 view.detail.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().height(ROW_HEIGHT),
@@ -126,7 +138,7 @@ fun ActionProgressContent(
                 state.output.ifBlank { if (state.running) "Waiting for output..." else "No output." },
                 fontFamily = FontFamily.Monospace,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().height(ROW_HEIGHT * (ComposeProgress.MAX_ITEMS + 1)).heightIn(max = 400.dp).verticalScroll(scroll),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(ROW_HEIGHT * (ComposeProgress.MAX_ITEMS + 1)).heightIn(max = 400.dp).verticalScroll(scroll),
             )
         }
 
