@@ -1,9 +1,13 @@
 package com.feerlessleadr.dockge.data
 
 import com.feerlessleadr.dockge.api.DockgeSocket
+import com.feerlessleadr.dockge.api.SelfUpdateApi
+import com.feerlessleadr.dockge.api.SelfUpdateClient
+import com.feerlessleadr.dockge.api.SelfUpdatePolicy
 import com.feerlessleadr.dockge.core.BaseUrl
 import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.core.TokenVault
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import com.feerlessleadr.dockge.api.ServerUpdates
@@ -27,6 +31,7 @@ class SessionManager(
     private val vault: TokenVault,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val selfClient: SelfUpdateApi = SelfUpdateClient(),
     private val socketFactory: (BaseUrl) -> DockgeSocket,
 ) {
     private class Entry(
@@ -40,7 +45,13 @@ class SessionManager(
 
     private val entries = mutableMapOf<String, Entry>()
     private val logs = mutableMapOf<String, EventLog>()
+    private val selfWatch = mutableMapOf<String, Job>()
     private var followJob: Job? = null
+
+    private val _selfUpdate = MutableStateFlow<Map<String, SelfUpdateState>>(emptyMap())
+
+    /** The Dockge-Enhanced update state per instance id. Absent until the first status request. */
+    val selfUpdate: StateFlow<Map<String, SelfUpdateState>> = _selfUpdate.asStateFlow()
 
     private val _states = MutableStateFlow<Map<String, ConnectionState>>(emptyMap())
 
@@ -63,6 +74,95 @@ class SessionManager(
         val servers = entry.stackStore.servers.value ?: return
         entry.updateStore.refresh(servers.filter { it.status != "offline" }.map { it.endpoint })
         if (entries[id] === entry) _updates.update { it + (id to entry.updateStore.byServer.value) }
+        refreshSelfUpdate(id)
+    }
+
+    /**
+     * Reads the Dockge-Enhanced update status (admin token, read only). A failed request keeps the last status and
+     * marks the instance unreachable, which is the normal case while Dockge restarts during its own update.
+     */
+    suspend fun refreshSelfUpdate(id: String) {
+        val entry = entries[id] ?: return
+        val token = vault.get(id)
+        if (token == null) {
+            setSelf(id) { it.copy(reachable = false, error = "Sign in to check Dockge's update.") }
+            return
+        }
+        try {
+            val status = selfClient.status(entry.baseUrl, token)
+            setSelf(id) { it.copy(status = status, reachable = true, error = null) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logs[id]?.add("self-update status failed: ${e.message}")
+            setSelf(id) { it.copy(reachable = false, error = e.message ?: "Could not reach Dockge.") }
+        }
+    }
+
+    /**
+     * Starts the safe self-update to the image the server reported (its own backup, health check and rollback do the
+     * work). The start call may take minutes or may never answer, because Dockge restarts during the update, so a
+     * watch polls the status until the server reports an end. A second start is refused while one is watched.
+     */
+    fun startSelfUpdate(id: String) {
+        val entry = entries[id]
+        val state = _selfUpdate.value[id] ?: SelfUpdateState()
+        val token = vault.get(id)
+        val target = state.status?.let { SelfUpdatePolicy.targetImage(it) }
+        val refusal = when {
+            entry == null -> "This instance is not connected."
+            token == null -> "Sign in to update Dockge."
+            target == null -> "No Dockge update is available."
+            selfWatch[id]?.isActive == true -> "A Dockge update is already running."
+            else -> null
+        }
+        if (refusal != null || entry == null || token == null || target == null) {
+            setSelf(id) { it.copy(error = refusal) }
+            return
+        }
+        logs[id]?.add("self-update requested: $target")
+        setSelf(id) { it.copy(watching = true, error = null) }
+        selfWatch[id] = scope.launch {
+            var startRefusal: String? = null
+            val start = launch {
+                try {
+                    val operation = selfClient.start(entry.baseUrl, token, target)
+                    logs[id]?.add("self-update start answered: ${operation.state}")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Dockge restarting also cuts this call; the status watch below decides the outcome.
+                    logs[id]?.add("self-update start call ended: ${e.message}")
+                    startRefusal = e.message
+                }
+            }
+            val deadline = clock() + SELF_UPDATE_WATCH_MS
+            var sawActive = false
+            var lastLogged = ""
+            while (clock() < deadline && entries.containsKey(id)) {
+                refreshSelfUpdate(id)
+                val operation = _selfUpdate.value[id]?.status?.operation
+                if (operation != null && operation.state != lastLogged) {
+                    logs[id]?.add("self-update state: ${operation.state}")
+                    lastLogged = operation.state
+                }
+                if (SelfUpdatePolicy.isActive(operation)) sawActive = true
+                // The server refused the start (for example another update is running) and nothing is in progress.
+                if (start.isCompleted && !sawActive && startRefusal != null) {
+                    setSelf(id) { it.copy(error = startRefusal) }
+                    break
+                }
+                // A finished state only counts once this run was seen, or the start call has answered (an old result is not news).
+                if (SelfUpdatePolicy.isFinished(operation) && (sawActive || start.isCompleted)) break
+                delay(SELF_UPDATE_POLL_MS)
+            }
+            setSelf(id) { it.copy(watching = false) }
+        }
+    }
+
+    private fun setSelf(id: String, change: (SelfUpdateState) -> SelfUpdateState) {
+        if (!entries.containsKey(id)) return
+        _selfUpdate.update { it + (id to change(it[id] ?: SelfUpdateState())) }
     }
 
     fun start() {
@@ -116,6 +216,12 @@ class SessionManager(
     private companion object {
         const val RECOVER_GRACE_MS = 10_000L
 
+        /** Polls while Dockge restarts; a failed poll is cheap. */
+        const val SELF_UPDATE_POLL_MS = 2_000L
+
+        /** A backup of a large data directory can take a long time before the update starts. */
+        const val SELF_UPDATE_WATCH_MS = 2 * 60 * 60_000L
+
         /** The server's own scan runs every 6 h by default, so asking more often than this gains nothing. */
         const val UPDATE_REFRESH_MS = 5 * 60_000L
     }
@@ -124,6 +230,8 @@ class SessionManager(
         val ids = list.map { it.id }.toSet()
         entries.keys.filter { it !in ids }.forEach(::remove)
         logs.keys.filter { it !in ids }.forEach(logs::remove)
+        selfWatch.keys.filter { it !in ids }.forEach { selfWatch.remove(it)?.cancel() }
+        _selfUpdate.update { state -> state.filterKeys { it in ids } }
         for (instance in list) {
             val entry = entries[instance.id]
             when {

@@ -1,24 +1,26 @@
-# STATUS (2026-11-20)
+# STATUS (2026-11-27)
 
-**Phase:** v0.1.1 is published (https://github.com/feerlessleadr/dockge-for-android/releases/tag/v0.1.1): Material 3 redesign and two selectable app icons. v0.1.0 was published earlier the same day. 149 unit tests pass.
+**Phase:** v0.1.1 is published and the owner has updated to it through Obtainium. Current work (unreleased, branch `dockge-self-update`, not committed): updating the Dockge instance itself through dockge-enhanced's safe self-update. Unit tests pass (161). Nothing has run against a live server yet.
 
 ## Done
-- M0 to M7 done and owner-verified (see docs/progress.md). Release workflow proven twice (v0.1.0, v0.1.1: signed, certificate pinned).
-- 0.1.1 (PR 14, merged): own blue palette by default (wallpaper colors opt-in), compact screen titles, bottom navigation (Instances, Settings), Updates screen behind the amber banner, Alerts opened from Settings, stack filters, state-aware stack buttons, checklist progress sheet, Blue and Light launcher icons. Spec: `docs/design.md`. Owner tested the debug build ("looks better, merge").
-- Published: `dockge-for-android-v0.1.1.apk` (1860242 bytes, SHA-256 2c597142fd6aded74f0d8012a54ca6ae2056c17c18c0a3053827890a8801568c) and its `.sha256`. Same pinned signer certificate as 0.1.0.
+- M0 to M7 and 0.1.1 (Material 3 design, selectable icons), owner-verified; see docs/progress.md.
+- Self-update (2026-11-27, code only): `api/SelfUpdate.kt` (client, parser, policy), `data/SelfUpdateData.kt`, `SessionManager` status refresh and start/watch, `ui/instances/DockgeUpdateCard.kt`, stack detail and Updates screen changes. The Dockge stack no longer gets the plain stack update. Design: DECISIONS.md 2026-11-27. API notes: docs/dockge-api.md (self-update section).
 
 ## Next action
-- Owner: update 0.1.0 to 0.1.1 through Obtainium and report. That proves the update path (same key, higher version code). Check the app opens, the icon switch works in Settings, and a home-screen shortcut from 0.1.0 may need adding again.
-- Then pick the next work (ideas below). Nothing is queued.
+- Owner: confirm the production Dockge has a backup provider set up (Restic or Zerobyte, see Settings on the server). Without one the server refuses the update, which is safe.
+- "Update all" per server is built too (see DECISIONS.md 2026-11-27); test it live with the self-update.
+- Then a live test on the test instance (not production), with the owner's go-ahead: a Dockge update to a newer digest, or a dry check with the status call only. Check: manual start works without `mode: sidecar`; the admin token is accepted on `/api/watcher/self/*`; the card's stages and final state; reconnect after Dockge restarts.
+- Then decide whether to commit the branch and release (version bump and `docs/releases/` notes only when the owner says "publish it").
 
 ## Open questions
-- What next? Candidates: per-service update, update-all, rollback, container logs, compose editor, terminal.
+- Should the Dockge stack's Restart, Stop and Down buttons also be blocked or warned? They are still offered on that stack.
 - TOTP seed storage: not implemented; ask before ever doing it.
 
 ## Not yet verified
-- Obtainium install and update with the signed releases (0.1.0 to 0.1.1), and the signed build at runtime.
-- Icon switch on the owner's launcher; 0.1.1 layout on small screens and large fonts.
-- Token re-login after a server restart, a revoked token, login rate limit (live). Linked (federated) servers: update status and events. The progress parser against other compose versions.
+- Everything in the self-update feature on a live server (see Next action).
+- Obtainium update 0.1.0 to 0.1.1 is confirmed by the owner (2026-11-27). Icon switch on the owner's launcher and 0.1.1 layout on small screens and large fonts are still open.
+- Token re-login after a server restart, a revoked token, login rate limit (live). Linked (federated) servers: update status and events.
 
 ## Owner manual steps
-- Update through Obtainium and report. Release tags only on "publish it". A tag that produced a public release is never moved or deleted; a bad release is replaced by the next patch version.
+- Confirm the backup setup on production (see Next action).
+- Release tags only on "publish it". A tag that produced a public release is never moved or deleted; a bad release is replaced by the next patch version.

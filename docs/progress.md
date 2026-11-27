@@ -136,3 +136,16 @@
 - PR 14 merged (92b9970), then tag v0.1.1 pushed on it. The Release workflow succeeded in every step. https://github.com/feerlessleadr/dockge-for-android/releases/tag/v0.1.1
 - Assets: dockge-for-android-v0.1.1.apk (1860242 bytes, SHA-256 2c597142fd6aded74f0d8012a54ca6ae2056c17c18c0a3053827890a8801568c, equal to GitHub's digest) and its .sha256. The assistant did not download or install the APK.
 - NOT verified yet: Obtainium update from 0.1.0 to 0.1.1, the icon switch on the owner's launcher.
+
+## 2026-11-27, Dockge self-update from the app (branch dockge-self-update, not committed)
+- Owner asked for the update button on the Dockge instance to run the fork's safe self-update instead of the plain stack update (which takes Dockge offline with no backup or rollback). Proposal approved.
+- Added `api/SelfUpdate.kt`: `SelfUpdateClient` (`GET /api/watcher/self/status`, `POST /api/watcher/self/update` with the server-reported digest only), `SelfUpdateParser`, `SelfUpdatePolicy` (target image, active and final states, Dockge image detection, stage labels). Interface `SelfUpdateApi` so the session logic can be tested.
+- `SessionManager`: status refresh (also with the 5 minute update round and on resume), `startSelfUpdate` (start call plus a 2 s status watch for up to 2 h, ends on a final state seen after an active one, or on a refused start), `selfUpdate` state flow.
+- UI: `DockgeUpdateCard` (offer with confirm, stage list while Dockge restarts, final result). The Dockge stack detail shows the card instead of the plain Update button and the watcher's image list. The Updates screen shows the card and leaves the Dockge stack out of the plain update rows.
+- Tests: 12 new (parser, policy, target and Dockge image detection, watch: success after offline gap, refused start, no update, no token, unreachable keeps last status). Existing 149 tests unchanged in intent; `UpdateTest` now passes `NoSelfUpdateApi` so the 5 minute round does not wait on the network. Debug unit tests pass (161 total).
+- NOT verified: anything against a live dockge-enhanced. Open items are listed in `docs/dockge-api.md` (self-update section).
+
+## 2026-11-27, "Update all" per server (same branch, not committed)
+- Added the Update all button to each server's stack list. Targets: managed stacks with a server-reported update on online servers; Dockge-Enhanced stacks excluded on every server. Runs stack updates one at a time through the stack's own update call; a failed stack does not stop the rest; the run stops if the connection drops.
+- Tests: 6 new (plan rules incl. Dockge exclusion on linked servers, run order, failure continuation, connection-loss stop). Debug unit tests: 167 pass.
+- NOT verified on a device or live server.

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.feerlessleadr.dockge.api.Stack
 import com.feerlessleadr.dockge.api.StackStatus
 import com.feerlessleadr.dockge.data.ConnectionState
+import com.feerlessleadr.dockge.data.UpdateAll
 import com.feerlessleadr.dockge.ui.components.ListCard
 import com.feerlessleadr.dockge.ui.components.ScreenHeader
 import com.feerlessleadr.dockge.ui.components.StatusChip
@@ -67,6 +68,10 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
     var query by remember { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(Filter.All) }
     val updates by vm.updates(instanceId).collectAsState(initial = null)
+    val self by vm.selfUpdate(instanceId).collectAsState(initial = null)
+    val batch by vm.updateAll.collectAsState()
+    var confirmingAll by remember { mutableStateOf(false) }
+    var refusal by remember { mutableStateOf<String?>(null) }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     // Opening the list asks for the update status again (it does nothing until the stack list is known).
     val listKnown = servers != null
@@ -89,6 +94,8 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
         val multi = all.size > 1
         fun hasUpdate(s: Stack) = updates?.get(s.endpoint)?.availableFor(s.name)?.isNotEmpty() == true
         val withUpdates = updates?.values?.sumOf { it.availableCount } ?: 0
+        // Dockge's own stacks are never part of "update all" (see UpdateAll.plan).
+        val updateTargets = UpdateAll.plan(all, updates.orEmpty(), self?.status?.repo)
         val watcherOff = all.filter { updates?.get(it.endpoint)?.watcherEnabled == false }
         val q = query.trim()
 
@@ -167,6 +174,14 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
                             )
                         }
                     }
+                    if (updateTargets.isNotEmpty()) {
+                        UpdateAllButton(
+                            count = updateTargets.size,
+                            enabled = connection == ConnectionState.Connected && batch?.running != true,
+                            onClick = { refusal = null; confirmingAll = true },
+                        )
+                    }
+                    refusal?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 }
             }
             if (items.none { it is ListItem.Row }) {
@@ -196,6 +211,21 @@ fun StackListScreen(vm: InstancesViewModel, instanceId: String, onBack: () -> Un
                     }
                 }
             }
+        }
+
+        if (confirmingAll) {
+            UpdateAllConfirm(
+                serverName = instance?.name ?: "this instance",
+                targets = updateTargets,
+                onConfirm = {
+                    confirmingAll = false
+                    refusal = vm.startUpdateAll(instanceId)
+                },
+                onDismiss = { confirmingAll = false },
+            )
+        }
+        batch?.let { state ->
+            UpdateAllProgress(state, onClose = { vm.dismissUpdateAll() })
         }
     }
 }

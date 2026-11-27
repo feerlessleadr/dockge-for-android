@@ -49,7 +49,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.platform.LocalUriHandler
 import com.feerlessleadr.dockge.api.ImageLinks
 import com.feerlessleadr.dockge.api.ImageUpdate
+import com.feerlessleadr.dockge.api.SelfUpdatePolicy
 import com.feerlessleadr.dockge.api.ServerUpdates
+import com.feerlessleadr.dockge.ui.instances.DockgeUpdateCard
 import com.feerlessleadr.dockge.data.Action
 import com.feerlessleadr.dockge.data.ActionOutcome
 import com.feerlessleadr.dockge.data.ContainerAction
@@ -127,6 +129,13 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
     val allUpdates by vm.updates(instanceId).collectAsState(initial = null)
     val serverUpdates = allUpdates?.get(endpoint)
     val available = serverUpdates?.availableFor(stackName).orEmpty()
+    val selfState by vm.selfUpdate(instanceId).collectAsState(initial = null)
+    // The Dockge stack itself: updated only by the safe self-update, never by the plain stack update (it would stop Dockge mid-update).
+    val selfRepo = selfState?.status?.repo
+    val isSelf = endpoint.isEmpty() && selfRepo != null && (
+        loaded?.detail?.containers?.any { SelfUpdatePolicy.isDockgeImage(it.image, selfRepo) } == true ||
+            serverUpdates?.forStack(stackName)?.any { SelfUpdatePolicy.isDockgeImage(it.image, selfRepo) } == true
+        )
     val uriHandler = LocalUriHandler.current
 
     // Keyed on the connection too: when the instance reconnects (for example after the phone slept) the loop starts
@@ -193,7 +202,7 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                         val pad = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         val running = stack?.status == com.feerlessleadr.dockge.api.StackStatus.Running
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (available.isNotEmpty()) {
+                            if (available.isNotEmpty() && !isSelf) {
                                 Button(
                                     enabled = canAct, contentPadding = pad,
                                     onClick = { request(StackAction.Update, stack?.title ?: stackName) { vm.updateStack(instanceId, endpoint, stackName) } },
@@ -231,13 +240,17 @@ fun StackDetailScreen(vm: InstancesViewModel, instanceId: String, endpoint: Stri
                         }
                     }
                 }
-                item {
-                    UpdateSection(
-                        updates = serverUpdates,
-                        stackName = stackName,
-                        available = available,
-                        openLink = { url -> runCatching { uriHandler.openUri(url) } },
-                    )
+                if (isSelf) {
+                    item { DockgeUpdateCard(state = selfState, onUpdate = { vm.updateDockge(instanceId) }) }
+                } else {
+                    item {
+                        UpdateSection(
+                            updates = serverUpdates,
+                            stackName = stackName,
+                            available = available,
+                            openLink = { url -> runCatching { uriHandler.openUri(url) } },
+                        )
+                    }
                 }
                 if (data == null) {
                     item {
