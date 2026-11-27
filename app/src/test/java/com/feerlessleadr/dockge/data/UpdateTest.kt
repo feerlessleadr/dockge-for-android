@@ -121,7 +121,7 @@ class UpdateTest {
         val vault = MemoryVault()
         val repo = InstanceRepository(MemoryInstanceStore(), vault)
         lateinit var socket: FakeSocket
-        val manager = SessionManager(repo, vault, backgroundScope) { _ ->
+        val manager = SessionManager(repo, vault, backgroundScope, selfClient = NoSelfUpdateApi) { _ ->
             FakeSocket().also {
                 socket = it
                 it.handler = { _, args ->

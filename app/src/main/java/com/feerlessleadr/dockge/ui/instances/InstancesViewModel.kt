@@ -11,6 +11,13 @@ import com.feerlessleadr.dockge.core.Instance
 import com.feerlessleadr.dockge.data.ConnectionState
 import com.feerlessleadr.dockge.api.DockgeSocket
 import com.feerlessleadr.dockge.api.ServerUpdates
+import com.feerlessleadr.dockge.api.SelfUpdatePolicy
+import com.feerlessleadr.dockge.api.SocketState
+import com.feerlessleadr.dockge.data.UpdateAll
+import com.feerlessleadr.dockge.data.UpdateAllState
+import com.feerlessleadr.dockge.data.UpdateTarget
+import kotlinx.coroutines.flow.last
+import com.feerlessleadr.dockge.data.SelfUpdateState
 import com.feerlessleadr.dockge.data.Action
 import com.feerlessleadr.dockge.data.ActionOutcome
 import com.feerlessleadr.dockge.data.ContainerAction
@@ -37,6 +44,8 @@ data class InstanceRow(
     val serverCount: Int = 1,
     /** Stacks with an image update on all servers, or null until the server was asked. */
     val updateCount: Int? = null,
+    /** True when the Dockge-Enhanced image of this instance has a newer version (the safe self-update offers it). */
+    val dockgeUpdate: Boolean = false,
 )
 
 data class ActionKey(val instanceId: String, val endpoint: String, val stackName: String)
@@ -49,7 +58,8 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
 
     val rows: StateFlow<List<InstanceRow>> = combine(
         container.instances.instances, container.sessions.states, container.sessions.stackLists, container.sessions.updates,
-    ) { list, states, stacks, updates ->
+        container.sessions.selfUpdate,
+    ) { list, states, stacks, updates, self ->
         list.map {
             val servers = stacks[it.id]
             val all = servers?.flatMap { sv -> sv.stacks }
@@ -60,6 +70,7 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
                 runningCount = all?.count { st -> st.status == StackStatus.Running },
                 serverCount = servers?.size ?: 1,
                 updateCount = updates[it.id]?.values?.sumOf { u -> u.availableCount },
+                dockgeUpdate = self[it.id]?.status?.let { s -> SelfUpdatePolicy.targetImage(s) != null } == true,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -103,8 +114,59 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
     /** Asks the instance's servers for their update status now (read only). */
     suspend fun refreshUpdates(id: String) = container.sessions.refreshUpdates(id)
 
+    /** The Dockge-Enhanced update state of one instance, or null before the first status request. */
+    fun selfUpdate(id: String): Flow<SelfUpdateState?> = container.sessions.selfUpdate.map { it[id] }
+
+    /** Starts the safe Dockge self-update (backup, health check, rollback on the server). The caller shows the confirm dialog first. */
+    fun updateDockge(instanceId: String) = container.sessions.startSelfUpdate(instanceId)
+
+    /** Asks the server about its own update now (read only). */
+    suspend fun refreshSelfUpdate(id: String) = container.sessions.refreshSelfUpdate(id)
+
     /** Starts an update of the whole stack: pull, then recreate. The caller shows the confirm dialog first. */
     fun updateStack(instanceId: String, endpoint: String, stackName: String) = runAction(instanceId, endpoint, stackName, StackAction.Update)
+
+    /** The stacks "update all" would update now on this instance (Dockge itself is never one of them). */
+    fun updateAllTargets(instanceId: String): List<UpdateTarget> = UpdateAll.plan(
+        container.sessions.stackLists.value[instanceId].orEmpty(),
+        container.sessions.updates.value[instanceId].orEmpty(),
+        container.sessions.selfUpdate.value[instanceId]?.status?.repo,
+    )
+
+    private val _updateAll = MutableStateFlow<UpdateAllState?>(null)
+
+    /** The "update all" run of this app session, or null before the first one. Lives here so leaving the screen does not lose it. */
+    val updateAll: StateFlow<UpdateAllState?> = _updateAll.asStateFlow()
+
+    /**
+     * Updates every stack in [updateAllTargets], one after another, with the same server call as the stack's own Update
+     * button. Returns a refusal message, or null when the run started. The caller shows the confirm dialog first.
+     */
+    fun startUpdateAll(instanceId: String): String? {
+        if (_updateAll.value?.running == true) return "An update all is already running."
+        if (_action.value?.state?.running == true) return "Another action is running. Wait for it to finish."
+        val self = container.sessions.selfUpdate.value[instanceId]
+        if (self?.watching == true || SelfUpdatePolicy.isActive(self?.status?.operation)) return "Dockge is updating itself. Wait for that to finish."
+        val targets = updateAllTargets(instanceId)
+        if (targets.isEmpty()) return "No stacks have updates to install."
+        val socket = container.sessions.session(instanceId)?.socket ?: return "This instance is not connected."
+        viewModelScope.launch {
+            UpdateAll.run(
+                targets = targets,
+                isConnected = { socket.state.value is SocketState.Connected },
+                runOne = { t -> StackActionRunner.run(socket, t.stackName, t.endpoint, StackAction.Update).last().outcome
+                    ?: ActionOutcome.Failed("No result from the server.") },
+                onChange = { _updateAll.value = it },
+            )
+            container.sessions.refreshUpdates(instanceId)
+        }
+        return null
+    }
+
+    /** Closes a finished "update all" summary. A running one cannot be dismissed. */
+    fun dismissUpdateAll() {
+        if (_updateAll.value?.running == false) _updateAll.value = null
+    }
 
     private val _action = MutableStateFlow<ActionUi?>(null)
 
@@ -125,6 +187,10 @@ class InstancesViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun launchAction(key: ActionKey, action: Action, target: String, start: (DockgeSocket) -> Flow<ActionState>) {
         if (_action.value?.state?.running == true) return
+        if (_updateAll.value?.running == true) {
+            _action.value = ActionUi(key, action, target, ActionState(outcome = ActionOutcome.Failed("An update all is running. Wait for it to finish.")))
+            return
+        }
         val socket = container.sessions.session(key.instanceId)?.socket
         if (socket == null) {
             _action.value = ActionUi(key, action, target, ActionState(outcome = ActionOutcome.Failed("This instance is not connected.")))

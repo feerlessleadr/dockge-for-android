@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.feerlessleadr.dockge.api.SelfUpdatePolicy
 import com.feerlessleadr.dockge.api.Stack
 import com.feerlessleadr.dockge.ui.components.ListCard
 import com.feerlessleadr.dockge.ui.components.ScreenHeader
@@ -47,10 +48,10 @@ fun UpdatesScreen(vm: InstancesViewModel, onBack: () -> Unit, onOpen: (instanceI
                     subtitle = when (total) { 0 -> "Everything is up to date"; 1 -> "1 stack has an update"; else -> "$total stacks have updates" },
                 )
             }
-            rows.filter { (it.updateCount ?: 0) > 0 }.forEach { row ->
+            rows.filter { (it.updateCount ?: 0) > 0 || it.dockgeUpdate }.forEach { row ->
                 instanceUpdates(vm, row.instance.id, row.instance.name, onOpen)
             }
-            if (total == 0) item {
+            if (total == 0 && rows.none { it.dockgeUpdate }) item {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Text("No updates found.") }
             }
         }
@@ -64,11 +65,17 @@ private fun LazyListScope.instanceUpdates(
     item(key = "i:$instanceId") {
         val servers by vm.stacks(instanceId).collectAsState(initial = null)
         val updates by vm.updates(instanceId).collectAsState(initial = null)
+        val self by vm.selfUpdate(instanceId).collectAsState(initial = null)
+        val selfRepo = self?.status?.repo
+        // The Dockge stack is updated only through the safe self-update card, never as a plain stack row.
+        fun isSelfStack(s: Stack): Boolean = s.endpoint.isEmpty() && selfRepo != null &&
+            updates?.get("")?.forStack(s.name)?.any { SelfUpdatePolicy.isDockgeImage(it.image, selfRepo) } == true
         val withUpdates = servers.orEmpty().flatMap { it.stacks }.filter { s ->
-            updates?.get(s.endpoint)?.availableFor(s.name)?.isNotEmpty() == true
+            !isSelfStack(s) && updates?.get(s.endpoint)?.availableFor(s.name)?.isNotEmpty() == true
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionHeader(instanceName)
+            if (dockgeUpdateNeedsAttention(self)) DockgeUpdateCard(state = self, onUpdate = { vm.updateDockge(instanceId) })
             withUpdates.forEach { s -> UpdateRow(s, updates?.get(s.endpoint)?.availableFor(s.name).orEmpty().map { it.image }) { onOpen(instanceId, s.endpoint, s.name) } }
         }
     }

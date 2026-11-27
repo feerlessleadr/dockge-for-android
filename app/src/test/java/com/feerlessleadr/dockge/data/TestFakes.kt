@@ -65,3 +65,12 @@ internal class MemoryInstanceStore(var saved: List<Instance> = emptyList()) : In
     override fun load(): List<Instance> = saved
     override fun save(instances: List<Instance>) { saved = instances; saves++ }
 }
+
+/** Stands in for the Dockge self-update REST calls in tests that are not about them: no network, an immediate refusal. */
+internal object NoSelfUpdateApi : com.feerlessleadr.dockge.api.SelfUpdateApi {
+    override suspend fun status(baseUrl: String, token: String): com.feerlessleadr.dockge.api.SelfUpdateStatus =
+        throw com.feerlessleadr.dockge.api.ApiException("No self-update server in this test.")
+
+    override suspend fun start(baseUrl: String, token: String, targetImage: String): com.feerlessleadr.dockge.api.SelfUpdateOperation =
+        throw com.feerlessleadr.dockge.api.ApiException("No self-update server in this test.")
+}

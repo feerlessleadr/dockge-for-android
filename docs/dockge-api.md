@@ -861,3 +861,13 @@ Reminder: ImageWatcher uses Apprise only for the non-Discord path of `sendUpdate
 - Apprise's own ntfy parameter support (external project).
 - `ImageStatus` and update-history exact JSON beyond fields in `image-watcher.ts:287-297`.
 - Dockerfile/compose healthcheck endpoint.
+
+## Self-update of the Dockge instance (app use, read from fork source 2026-11-27, not run live)
+Source: `reference/dockge-enhanced` (backend/self-update/manager.ts, backend/routers/watcher-router.ts:1094-1160, backend/watchers/self-update-checker.ts:360-400, extra/self-update-sidecar/index.js, docs/self-update-recovery.md).
+
+- `GET /api/watcher/self/status` (admin Bearer): `{ok, updateAvailable, localDigest, remoteDigest, localBuild, remoteBuild, containerName, repo, checkedAt, error, operation, progress, selfUpdateSettings}`. `repo` is `aerya/dockge-enhanced`. `operation` is the last run (null before the first), read from the status file the sidecar writes.
+- `POST /api/watcher/self/update` with `{targetImage}`: admin Bearer. The app sends only `ghcr.io/<repo>@<remoteDigest>` taken from the status. The server refuses any other repository, and refuses while another self-update is active (500 with `message`). The reply comes only after the backup (inline on the server), so it may be slow or never arrive when Dockge restarts; the app polls the status instead.
+- Operation states: `backing-up`, `verifying-backup`, `updating`, `waiting-health`, `rolling-back` (active); `succeeded`, `failed`, `rolled-back`, `rollback-failed` (final). Stages: `preparing`, `backup`, `verify-backup`, `prune-backup`, `prepare-updater`, `pull-target`, `replace-container`, `health-check`, `rollback`. `stageHistory` entries: `{stage, skipped, startedAt, finishedAt}`.
+- Backup gate: the default provider is `restic`. The run fails before anything changes if no restic repository is set up; `zerobyte` needs a job id and data path; `external` needs an acknowledgement. Settings are on the server (`/self/settings`).
+- The plain stack update (`updateStack`) must never be used on the Dockge stack: it recreates the container without backup or rollback and stops Dockge mid-update. The app detects the Dockge stack by its image (`ghcr.io/aerya/dockge-enhanced`).
+- Unverified until a live run on the test instance: whether a manual start needs `mode: sidecar` (the code gates only automatic runs on it), whether the admin session token is accepted on these routes (it is on `/api/watcher/image/*`, which the monitoring feed uses), and the sidecar's Docker socket and state-directory mounts in the owner's compose file.
